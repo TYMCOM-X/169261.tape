@@ -1,0 +1,12 @@
+restore LEVEL.DIR
+restore NEW.PROJECT
+restore NICKNAMES
+restore NODE
+restore NODE.HIST
+restore NODE.TEXT
+restore RES
+restore STATUS.DIR
+restore TASK.DIR
+restore TASK
+restore TS.STATUS
+restore GLOBAL.VAR
