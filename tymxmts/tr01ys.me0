@@ -1,0 +1,82 @@
+%internal% procedure INSERT.NODE
+%
+calling procedure:
+    1. 	setup all data fields of NODE as desired
+    2. 	setup pointer fields in exactly one of these combinations:
+	a.  UP setup, DN,PRED,SUCC default
+	b.  PRED setup, UP,DN,SUCC default
+	b.  SUCC setup, UP,DN,PRED default
+    3. 	apply INSERT.NODE
+    4. 	on return, all of UP,DN,PRED,SUCC will be setup and the node
+	will have been inserted into the tree
+%
+begin
+    move ID to INSERT.ID
+    move UP to INSERT.UP
+    move PRED to INSERT.PRED
+    move SUCC to INSERT.SUCC
+    if UP # default 
+	then select NODE via (ID=INSERT.UP)
+	    then begin
+		move DN to INSERT.PRED,INSERT.ID1
+		while INSERT.ID1 # default do begin
+		    move INSERT.ID1 to INSERT.PRED
+		    select NODE via (ID=INSERT.ID1)
+			then move SUCC to INSERT.ID1
+		  	else abort
+			    "?INSERT.NODE: node ",INSERT.ID1 as "8L",
+				" missing while scanning for end of DN list",@cr,
+			    "?",@9,"ID      ",ID,@tab 2,TITLE,@cr,
+			    "?",@9,"DN      ",DN,@cr
+		end
+	    end
+	    else abort 
+		"?INSERT.NODE: parent node does not exist",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"UP      ",INSERT.UP
+    if DN # default 
+	then select NODE via (ID=INSERT.DN)
+	    then if UP = INSERT.ID then nothing else abort
+		"?INSERT.NODE: attempt to reown non-orphan",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"DN      ",INSERT.DN
+	    else abort
+		"?INSERT.NODE: child node does not exist",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"DN      ",INSERT.DN
+    if PRED # default 
+	then select NODE via (ID=INSERT.PRED)
+	    then begin
+	    	move UP to INSERT.UP
+		move SUCC to INSERT.SUCC
+	    end
+	    else abort 
+		"?INSERT.NODE: predecessor node does not exist",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"PRED    ",INSERT.PRED
+    if SUCC # default 
+	then select NODE via (ID=INSERT.SUCC)
+	    then begin
+	    	move UP to INSERT.UP
+		move PRED to INSERT.PRED
+	    end
+	    else abort 
+		"?INSERT.NODE: successor node does not exist",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"SUCC    ",INSERT.SUCC
+    if INSERT.PRED # default
+	then select NODE via (ID=INSERT.PRED)
+	    then alter NODE using (INSERT.ID for SUCC)
+	    else nothing
+	else select NODE via (ID=INSERT.UP)
+	    then alter NODE using (INSERT.ID for DN)
+	    else nothing
+    if INSERT.SUCC # default
+	then select NODE via (ID=INSERT.SUCC)
+	    then alter NODE using (INSERT.ID for PRED)
+	    else nothing
+    move INSERT.UP to UP
+    move INSERT.PRED to PRED
+    move INSERT.SUCC to SUCC
+    insert into NODE
+end
