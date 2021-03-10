@@ -1,0 +1,74 @@
+procedure REVIEW.AID
+begin
+
+    fields
+	DATE1		as date "ZM/DD/YB",
+	DATE2		same as DATE1,
+	CODE		as "N",
+	TOT.HOURS	same as HOURS
+	
+    relation TMP is
+	key	CODE,
+		ACT.BEG,
+		ID
+	data	HOURS
+
+    report to "*"
+	top.margin 4
+	bottom.margin 4
+	page.top @ff
+	heading.size 5
+	page.heading print
+	    "REVIEW AID",@cr,
+	    RES.NAME(RES via key),@cr,
+	    DATE1," through ",DATE2,@cr,@cr,@cr
+	group.heading on CODE 
+	    conditional on CODE begin
+		1: print "milestone projects",@cr,@cr
+		2: print "non-milestone projects",@cr,@cr
+		3: print "activities",@cr,@cr
+	    end
+	group.footing on CODE print @cr,@cr
+
+    RES.ID.BLOCK: begin
+	prompt "resource: " 
+	accept RES.ID
+	move upper.case(RES.ID) to RES.ID
+	select RES via key
+	    then type trim(RES.NAME),@cr
+	    else repeat RES.ID.BLOCK
+    end
+    DATE.BLOCK: begin
+	prompt "review date (MM/DD/YY): "
+	accept DATE2
+	move DATE2 to DATE1
+	subtract 1 from year(DATE1)
+    end
+
+    for each TASK
+	if (RES.ID of TASK = RES.ID of procedure)
+	and (DOE > DATE1 and <= DATE2)
+	then begin
+	    select NODE via key then begin
+		if VALUE > 0 then move 1 to CODE
+		else if KIND = 1 then move 2 to CODE
+		else move 3 to CODE
+		move ACT.BEG to ACT.BEG of procedure
+	    end
+	    select TMP via key
+		then alter TMP using (HOURS+HOURS of TASK for HOURS)
+		else insert into TMP
+	    add HOURS to TOT.HOURS
+	end
+
+    for each TMP
+	write report print 
+	    @tab 3, 
+	    TITLE(NODE via key),
+	    @tab 2,
+	    HOURS,
+	    @tab 3,
+	    (100*HOURS/TOT.HOURS) as "ZZB",
+	    @cr
+
+end
