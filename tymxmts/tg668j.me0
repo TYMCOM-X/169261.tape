@@ -1,0 +1,324 @@
+procedure PC70.RESOURCE.STATUS (OFILE,LEVEL1,LEVEL2,QTR,DATE1,DATE2)
+
+%
+    This procedure produces a report on time reported for each person
+    in the included group.  This is normally run from procedure MTX,
+    by the command pc70.rs, and the time span information
+    is included in the command line (or by default).  All levels are
+    included.  If the file name for the report is not given in the
+    command, it will be prompted for by MAGNUM (as "*" is the default
+    used in MTX).
+
+   Report sorted by manager, then unit assigned to that manager are
+      reported in alphabetical order by last name  1/31/83  L.Lindley
+   KIND report footings added  11/15/82  L.Lindley
+   KIND changes  11/11/82  L.Lindley
+   RES.TERM.DATE added, history lines added  3/15/82  L.Lindley
+%
+begin
+
+fields
+    BUDGET same as HOURS,
+    TODATE same as HOURS,
+    RES.HRS same as HOURS,
+    HOURS.TOTAL  as "5ZN.B",
+    BUDGET.TOTAL  as "5ZN.B",
+    TODATE.TOTAL  as "5ZN.B",
+    REMAIN.TOTAL  as "5ZN.B",
+    HOURS.TOTAL.KIND  as "5ZN.B",
+    KIND.TODATE  as "5ZN.B",
+    VAR.TOTAL  as "5ZN.B",
+    SPACE.POS  as "2N",
+    LAST.NAME as "20C",
+    START.DATE same as DATE2,
+    OLD.ID same as ID,
+    PCT as "ZZB",
+    VAR as "ZZZN.B+"
+
+relation RPT.ORDER is
+    key  RES.MGR, LAST.NAME
+    data RES.ID
+
+relation RES.INCLUDE is
+    key RES.ID
+
+relation TMP is
+    key RES.ID, KIND, ID, TASK.ID
+    data HOURS, BUDGET, TODATE, REMAIN, PCT, VAR
+
+relation TMP.HISTORY is
+    key RES.ID, ID, DOE, CNT
+    data LINE
+
+report to OFILE
+    page.top @ff
+    top.margin 3
+    bottom.margin 3
+    heading.size 9
+    page.heading begin 
+	if QTR # default then print QTR
+	else if DATE2-DATE1=6 then print "week ending ",DATE2
+	else print DATE1," to ",DATE2
+	print @tab to 27,"Milestone Tracking System",
+	@tab to 71,"page",PAGE.NUM as "ZZN",@cr,
+	"for: "
+   	select RES via RES.ID of procedure
+	    then begin move RES.MGR to RES.MGR of procedure 
+		print RES.NAME end
+	    else print RES.ID
+	print @tab to (69-length(USER.NAME)),
+	today as date "ZM/DD/YB ",trim(USER.NAME), @cr,
+	"mgr: "
+   	select RES via RES.ID=RES.MGR of procedure
+	    then print RES.NAME 
+	    else print RES.MGR
+	print @tab to 24,"P E R S O N N E L   S T A T U S", @cr,@cr,@cr,
+	@tab to 9+size(TASK.DESC),
+	"  ............hours.............       under+",@cr,
+	@tab to 9+size(TASK.DESC),
+	"    this  orignl      to          pct   over-",@cr,
+	@tab 8,"task", @tab to 9+size(TASK.DESC),
+	"  period  budget    date  remain  fin  budget",@cr,@cr
+    end
+procedure VISIT
+begin
+    if (TRV.ORDER = 1 or 2) and 
+    (LEVEL >= LEVEL1 and <= LEVEL2) and
+    (ACT.BEG = default or <= DATE2) and
+    (ACT.FIN = default or >= DATE1) and
+    ((ACT.BEG # default) or (EST.BEG = default or <= DATE2))
+    then begin
+      include text "GET.STATUS"
+	for each NODE.HIST via ID
+           if (DOE >= DATE1 and <= DATE2) then
+             insert into TMP.HISTORY
+	for each TASK via ID
+	    if (DOE = default or <= DATE2) then select TMP via key
+		then begin
+		    if (KIND = 2) or (DOE >= START.DATE and <= DATE2)
+			then add HOURS of TASK to TODATE
+			else nothing
+		    if REMAIN of TASK # default
+			then move REMAIN of TASK to REMAIN
+			else move max(REMAIN-HOURS of TASK,0) to REMAIN
+		    if (REMAIN # 0) and (KIND = 2)
+			then move 100*TODATE/(TODATE+REMAIN) to PCT
+			else move default to PCT
+		    if BUDGET # default 
+			then move BUDGET-(TODATE+REMAIN) to VAR
+			else move default to VAR
+		    if DOE >= DATE1 then add HOURS of TASK to HOURS
+		    alter TMP 
+		end
+		else begin
+		    move REMAIN to BUDGET
+		    if (KIND= 2) or (DOE >= START.DATE and <= DATE2)
+			then move HOURS of TASK to TODATE
+			else move 0 to TODATE
+		    if (REMAIN # 0) and (KIND = 2)
+			then move 100*TODATE/(TODATE+REMAIN) to PCT
+			else move 0 to PCT
+		    if BUDGET # default 
+			then move BUDGET-(TODATE+REMAIN) to VAR
+			else move default to VAR
+		    if DOE < DATE1 then move 0 to HOURS
+                    if (0 # HOURS) or
+                    ((STATUS = "I" or "P" or "O") and
+		    (0 # HOURS or BUDGET or TODATE or REMAIN))
+			then 
+                        begin
+                        insert into TMP
+                        insert into RES.INCLUDE on duplicate nothing
+                        end
+		end
+    end
+end
+
+include text "TRAVERSE"
+
+procedure RES.RPT
+begin
+
+move 0 to RES.HRS
+move 0 to OLD.ID
+for each TMP via RES.ID
+  begin
+  if ID # OLD.ID then
+    select NODE via key then begin
+	print ID, @tab 2, TITLE
+	if default # IMPORTANCE
+	    then print "  <", IMPORTANCE as "6L", ">"
+	if ACT.BEG # default then print 
+	    ACT.BEG as date "  ZM/DD/YB", " (ab)"
+	else if EST.BEG # default then print 
+	    EST.BEG as date "  ZM/DD/YB", " (eb)"
+	if ACT.FIN # default then print 
+	    ACT.FIN as date "  ZM/DD/YB", " (af)"
+	else if EST.FIN # default then print 
+	    EST.FIN as date "  ZM/DD/YB", " (ef)"
+	print @cr 
+        let OLD.ID = ID
+        end
+
+    add HOURS  to HOURS.TOTAL
+    add HOURS  to HOURS.TOTAL.KIND
+    add BUDGET  to BUDGET.TOTAL
+    add TODATE  to TODATE.TOTAL
+    add TODATE  to KIND.TODATE
+    add REMAIN  to REMAIN.TOTAL
+    add VAR  to VAR.TOTAL
+    print 
+	@tab 2,
+	TASK.ID, @tab 2
+    select TASK.DIR via key
+	then print TASK.DESC
+	else print "?? task ??"
+    print
+	@tab to 9+size(TASK.DESC), @tab 2,
+	HOURS, @tab 2,
+	BUDGET
+    if (BUDGET = 0) or (KIND = 2)
+	then print "  "
+	else print "q "
+    print
+	TODATE
+    if (TODATE = 0) or (KIND = 2)
+	then print "  "
+	else print "q "
+    print
+	REMAIN, @tab 2,
+	PCT, @tab 2,
+	VAR, @cr
+
+  if ID changing then select NODE via key then begin 
+	add HOURS.TOTAL to RES.HRS
+	print 
+	    " TOTAL", @tab to 9+size(TASK.DESC), @tab 2,
+	    HOURS.TOTAL as HOURS, @tab 2,
+	    BUDGET.TOTAL as BUDGET
+	if (BUDGET.TOTAL = 0) or (KIND = 2)
+	    then print "  "
+	    else print "q "
+	print
+	    TODATE.TOTAL as TODATE
+	if (TODATE.TOTAL = 0) or (KIND = 2)
+	    then print "  "
+	    else print "q "
+	print
+	    REMAIN.TOTAL as REMAIN, @tab 2
+	if ACT.FIN # default then print 
+	    "FIN  "
+	else if REMAIN.TOTAL # 0 then print
+	    (100*TODATE.TOTAL/(TODATE.TOTAL+REMAIN.TOTAL)) as "ZZN","% "
+	else print 
+	    @tab 5
+	if EST.HRS # 0 then print
+	    VAR.TOTAL as VAR
+	print @cr,@cr 
+	move 0 to HOURS.TOTAL
+	move 0 to BUDGET.TOTAL
+	move 0 to TODATE.TOTAL
+	move 0 to REMAIN.TOTAL
+	move 0 to VAR.TOTAL
+	end
+
+  if KIND changing then
+        begin
+	print @cr
+        if KIND = 1 then print " ACTIVITY TOTAL"
+        else if KIND = 2 then print " PROJECT TOTAL"
+        else print " BACKGROUND PROJECT TOTAL"
+	print @tab to 35, HOURS.TOTAL.KIND as HOURS, @tab 10
+        print KIND.TODATE as TODATE
+        if KIND = 1 then print "q " else print "  "
+	print @cr,@cr 
+        move 0 to HOURS.TOTAL.KIND
+        move 0 to KIND.TODATE
+        end
+end    % for each TMP %
+
+print @cr,
+  "*TOTAL HOURS",@tab to 9+size(TASK.DESC),@tab 2,RES.HRS,@cr
+let OLD.ID = default
+for each TMP.HISTORY via RES.ID
+    begin
+    if ID ne OLD.ID then
+      begin
+      let OLD.ID = ID
+      select NODE via key then
+        print @cr,@cr,ID, @tab 2, TITLE,@cr
+      end
+    print @cr,trim(LINE)
+    if DOE changing then
+      begin
+      if length(LINE) > 67 then print @cr,@tab 67
+      print "  /",DOE as date "ZM-DD-YY"
+      end
+    end
+
+end
+%
+	M A I N
+%
+if DATE1 = default then move next.date(SATURDAY,today)-14 to DATE1
+if DATE1 = DATE2 then move DATE2-6 to DATE1
+if DATE2 = default then move next.date(FRIDAY,DATE1) to DATE2
+if QTR # default then move DATE1 to START.DATE else
+  begin
+  move year(DATE2-6) to year(START.DATE)
+  conditional on month(DATE2-6) begin
+    1 or 2 or 3:  move 1 to month(START.DATE)
+    4 or 5 or 6:  move 4 to month(START.DATE)
+    7 or 8 or 9:  move 7 to month(START.DATE)
+    10 or 11 or 12:  move 10 to month(START.DATE)
+    end
+  move next.date(SATURDAY,first.day(START.DATE)-1) to START.DATE
+  end
+move 1 to ROOT
+apply TRAVERSE (ROOT)
+
+move default to RES.ID
+for each RES
+    if (RES.ID # default) and
+      (( RES.TERM.DATE = default) or (RES.TERM.DATE >= DATE1 ))
+    then 
+      begin
+      move position (RES.NAME," ") to SPACE.POS
+      move substr(RES.NAME,SPACE.POS + 1) to LAST.NAME 
+      insert into RPT.ORDER
+      end
+
+%  By checking RES.INCLUDE any people who have no records will not
+   have reports written (being sure to keep the top manager) %
+
+for each RPT.ORDER
+    select RES.INCLUDE via RES.ID then nothing
+    else if RES.MGR # default then delete from RPT.ORDER via key
+
+%  Since the top manager of the unit will not have a manager; the following
+   rather strange looking order will create a sorting by manager, then those
+   reporting to that manager alphabetically by last name  %
+
+for each RPT.ORDER via RES.MGR = RES.ID
+  for each RPT.ORDER via RES.MGR = RES.ID
+    write report
+      begin
+      move RES.ID to RES.ID of procedure 
+      print page.top
+      apply RES.RPT
+      for each RPT.ORDER via RES.MGR = RES.ID
+        begin
+        move RES.ID to RES.ID of procedure 
+        print page.top
+    pply RES.RPT
+        for each RPT.ORDER via RES.MGR = RES.ID
+          begin
+          print page.top
+          move RES.ID to RES.ID of procedure 
+          apply RES.RPT
+          end
+        end
+end
+end
+    }
+[O‚
