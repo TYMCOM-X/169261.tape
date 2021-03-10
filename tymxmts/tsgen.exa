@@ -1,0 +1,30 @@
+; 	generating MTS time sheets
+
+.o wp$				; must set WF or WP license
+.xmagnum			; run version 13
+4-DEC-1981  11:06:41
+
+=:SCHEMA MTS
+
+User: WRS          Job No:    005
+
+:run time.sheets		; procedure TIME.SHEETS
+LOADING TIME.SHEETS
+EXECUTION
+
+>>gen bils darp todc		; may also say GEN ALL
+week ending [Dec04]: 		; may type date of any Friday
+PASS 1:current projects = 203, current tasks = 347
+BILS (WRS)Dec04.TIM
+DARP (DARREN)Dec04.TIM
+TODC (TODD)Dec04.TIM
+>>quit				; leave TIME.SHEETS
+
+EXECUTION COMPLETED
+
+:quit				; leave MAGNUM
+4-DEC-1981  11:07:11
+
+EXIT
+
+.
