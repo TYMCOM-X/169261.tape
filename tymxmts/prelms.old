@@ -1,0 +1,181 @@
+procedure PRELIM.MS (OFILE,ROOT,QTR,DATE1,DATE2)
+%
+	List all nodes with a non-zero value factor which 
+	begin before DATE2 and end after DATE1.
+%
+begin
+
+fields
+    ID. same as ID,
+    ROOT.TITLE same as TITLE,
+    THE.DEPTH same as TRV.DEPTH,
+    THE.PAGE as "4ZN"
+
+report to OFILE
+    page.size 62
+    page.top @ff
+    top.margin 3
+    heading.size 5
+    report.heading begin
+	move TITLE(NODE via ID=ROOT) to ROOT.TITLE
+	print @skip to 26,
+	@tab to 16, "Preliminary Milestone Report",@cr,@skip 3,
+	"Root:", @tab to 16, 
+	ROOT, "  ", trim(ROOT.TITLE),@cr
+	if DATE1 # default then print "Period:", @tab to 16
+	if QTR # default then print QTR,@cr
+	else if DATE2 = default then print "after ",DATE1,@cr
+	else print DATE1," through ",DATE2,@cr
+	print "Prepared:", @tab to 16,
+	today as date "ZM/DD/YB",@cr,
+	"By:", @tab to 16,
+	trim(USER.NAME),@cr,
+	page.top end
+    page.heading print
+	@tab to 70,"page",PAGE.NUM as "ZZZN",@cr,
+	@tab to (78-length(TITLE)),trim(TITLE),@cr,
+	@tab to 68-length(USER.NAME),today as date "ZM/DD/YY  ",
+	trim(USER.NAME),@cr,
+	@tab to 74,QTR,@cr,@cr
+
+relation NDX is
+    key	THE.PAGE,THE.DEPTH
+    data ID,TITLE,VALUE
+relation NDX. is
+    key ID
+
+procedure VISIT
+begin
+    if (TRV.ORDER = 1 or 2) and 
+    (VALUE # 0) and
+    (ACT.BEG = default or < DATE2) and
+    (ACT.FIN = default or > DATE1) and
+    (default # EST.BEG or EST.FIN)
+    then begin
+	move TITLE to TITLE of procedure
+	print @tab to (39-length(ROOT.TITLE)/2),trim(ROOT.TITLE),@cr,
+	@tab to 20,"Preliminary Milestone Specification",@cr,@cr,@cr
+	move PAGE.NUM to THE.PAGE
+	move TRV.DEPTH to THE.DEPTH
+	print "Title:"
+	move ID to ID.
+	while ID. # default do select NODE via (ID=ID.) then begin
+	    select NDX. via key
+		then nothing
+		else begin
+		    insert into NDX
+		    insert into NDX.
+		end
+	    print @tab to 16, 
+		ID,"  ",
+		LEVEL.DESC(LEVEL.DIR via LEVEL),"  ",
+		trim(TITLE)
+	    if TRV.ID = ID then print @tab to 62,DOE as date "ZM/DD/YB"
+	    print @cr
+	    add -1 to THE.DEPTH
+	    if UP # ROOT
+		then move UP to ID.
+		else move default to ID.
+	end
+	print @cr
+	if MGR # default then select RES via RES.ID=MGR
+	    then print "Manager:",@tab to 16,trim(RES.NAME),@cr
+	    else nothing
+	if LDR # default then select RES via RES.ID=LDR
+	    then print "Leader:",@tab to 16,trim(RES.NAME),@cr
+	    else nothing
+	if CLASS # default then print "Class:"
+	while CLASS # default do begin
+	    print @tab to 16
+	    select CLASS.DIR via CLASS=substr(CLASS,1,1)
+		then print trim(CLASS.DESC),@cr
+		else print '(class "',substr(CLASS,1,1),'")',@cr
+	    move substr(CLASS,2) to CLASS
+	end
+	if default # VALUE then print
+	    "Value:", @tab to 16, VALUE, @cr
+	if default # IMPORTANCE then print
+	    "Importance:", @tab to 16, IMPORTANCE, @cr
+	print @cr,"Schedule:",@cr
+	if default # EST.HRS or EST.BEG or EST.FIN then begin
+	    print "    estimate "
+	    if default # EST.HRS then begin
+		print EST.HRS," hours"
+		if KIND = 2 then print "/qtr" 
+		if default # EST.BEG or EST.FIN then print ",  " end
+	    if default # EST.BEG then begin
+		print "begin ", EST.BEG as date "ZM/DD/YB"
+		if default # EST.FIN then print ",  " end
+	    if default # EST.FIN then 
+		print "finish ", EST.FIN as date "ZM/DD/YB"
+	    print @cr
+	end
+	if ACT.BEG # default and <= DATE1 then print
+	    "    in progress, started ", ACT.BEG as date "ZM/DD/YB", @cr
+	print @cr,"Description:",@cr
+	for each NODE.TEXT via (ID,FIELD.ID="D") print 
+	    @tab to 4,trim(LINE),@cr
+	print @cr,"Remarks:",@cr
+	for each NODE.TEXT via (ID,FIELD.ID="R") print
+	    @tab to 4,trim(LINE),@cr
+	print @cr,"Completion criteria:",@cr
+	for each NODE.TEXT via (ID,FIELD.ID="C") print
+	    @tab to 4,trim(LINE),@cr
+	move 0 to CNT,HOURS,REMAIN
+	print @cr,"Tasks:",@tab to 52,"estim  compl",@cr
+	for each TASK via ID begin
+	    if DOE <= DATE1 then begin
+		add 1 to CNT
+		add HOURS to HOURS of procedure
+		move HOURS of procedure + REMAIN to REMAIN of procedure
+	    end
+	    if RES.ID changing and CNT > 0 then begin
+		select TASK.DIR via key
+		    then move TASK.DESC to TASK.DESC of procedure
+		    else move "task " + (TASK.ID as TASK.DESC) to TASK.DESC
+	  	select RES via key
+		    then move RES.NAME to RES.NAME of procedure
+		    else move "resource " + RES.ID to RES.NAME
+		print @tab to 4,
+		    TASK.DESC, 
+		    RES.NAME,"   ",
+		    REMAIN
+		if HOURS # 0 then print
+		    " ",HOURS
+		print @cr
+		move 0 to CNT,HOURS,REMAIN
+	    end
+	end
+	if default # DN then print @cr,"Subprojects:",@cr
+	move DN to ID.
+	while ID. # default do select NODE via ID=ID. then begin
+	    print ID,"  ", trim(TITLE),@cr
+	    move SUCC to ID.
+	end
+	print @cr,"History:",@cr
+	for each NODE.HIST via ID if DOE <= DATE1 then begin
+	    print @tab 4,trim(LINE)
+            if (default # DOE or RES.ID) and RES.ID changing then begin
+		if length(LINE) > 50 then print @cr,@tab 2
+		print "  /",RES.ID,DOE as date " ZM-DD-YY",@cr
+	    end
+	    print @cr
+	end
+	print page.top
+    end
+end
+
+include text "TRAVERSE"
+
+
+write report begin
+    apply TRAVERSE (ROOT)
+    move "INDEX" to TITLE
+    for each NDX begin
+	print @tab (8+3*THE.DEPTH), ID, "  ", trim(TITLE)
+	if VALUE > 0 then print @tab to 60, THE.PAGE
+	print @cr
+    end
+end
+
+end
