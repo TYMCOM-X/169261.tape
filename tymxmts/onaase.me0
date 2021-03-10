@@ -1,0 +1,22 @@
+procedure LOAD.RES (IFILE)
+%
+    This procedure will load an new "resource" from a file.  The file
+    is free form with commas separating the five fields:  RES.ID,
+    RES.NAME, RES.MGR, RES.UNAME, and RES.ROOT.  RES.TERM.DATE is
+    defaulted.
+%
+begin
+  
+source RES.DMP from IFILE
+    free form
+    input
+	RES.ID,
+	RES.NAME,
+	RES.MGR,
+	RES.UNAME,
+        RES.ROOT, @cr
+
+let RES.TERM.DATE = default
+for each RES.DMP insert into RES
+
+end
