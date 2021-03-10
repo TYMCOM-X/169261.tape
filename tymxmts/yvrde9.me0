@@ -1,0 +1,77 @@
+procedure LOAD.PLANNING(IFILE)
+begin
+
+    define
+	PARSE.BREAK = ","
+
+    fields
+	S as "80C"
+
+    source PLAN from IFILE
+	fixed form input
+	    S, @cr
+
+    relation LEVEL.XLATE is
+	key LEVEL.DESC
+	data LEVEL
+
+    relation PARENT is
+	key TRV.DEPTH
+	data ID
+
+    include text "PARSE"
+    include text "NEW.NODE"
+    include text "GRAFT.NODE"
+    include text "INSERT.NODE"
+
+    for each LEVEL.DIR
+	insert into LEVEL.XLATE
+
+    for each PLAN FEPLAN: begin
+	if S = default then finish FEPLAN
+	move 0 to TRV.DEPTH
+	while substr(S,1,1) = " " do begin
+	    move substr(S,2) to S
+	    add 1 to TRV.DEPTH
+	end
+	apply PARSE (S,TITLE)
+	apply PARSE (S,ID)
+	apply PARSE (S,LEVEL.DESC)
+	apply PARSE (S,LDR)
+	apply PARSE (S,EST.HRS)
+	apply PARSE (S,EST.BEG)
+	apply PARSE (S,EST.FIN)
+	delete from PARENT via TRV.DEPTH > TRV.DEPTH 
+	if ID = default 
+	    then begin
+		if TRV.DEPTH = 0 then abort "?attempt to create orphan: ",trim(TITLE)
+		apply NEW.NODE (ID)
+		type "inserting ",ID as "9L",": ",trim(TITLE),@cr
+		move ID(PARENT via key) to UP
+		move default to PRED,SUCC
+		apply INSERT.NODE
+	    end
+	    else begin
+		type "updating  ",ID as "9L",": ",trim(TITLE),@cr
+		select NODE via key 
+		    then begin
+			move TITLE of procedure to TITLE
+			move LEVEL(LEVEL.XLATE via LEVEL.DESC) to LEVEL
+			move LDR of procedure to LDR
+			  	move EST.HRS of procedure to EST.HRS
+			move EST.BEG of procedure to EST.BEG
+			move EST.FIN of procedure to EST.FIN
+			move UP to UP of procedure
+			alter NODE
+		    end
+		    else abort "?node not found: ID = ",ID as "9L"
+		if TRV.DEPTH > 0 then begin
+		    move ID(PARENT via key) to UP
+		    move default to PRED,SUCC
+		    apply GRAFT.NODE
+		end
+	    end
+	insert into PARENT using (TRV.DEPTH+1 for TRV.DEPTH)
+    end
+
+end
