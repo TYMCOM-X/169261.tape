@@ -1,0 +1,65 @@
+procedure QUICK.STATUS (OFILE,ROOT,LEVEL1,LEVEL2,QTR,DATE1,DATE2)
+%
+    11-10-82 - KIND changed /L.Lindley
+%
+begin
+
+fields
+    RPT.TITLE as "30C"		
+
+report to OFILE
+    page.size 1
+    page.top @cr
+    report.heading begin
+        print @cr
+	if QTR # default then print QTR
+	else print DATE1," to ",DATE2
+	print 
+	    " Quick Project Status", @cr,
+	    TITLE(NODE via ID=ROOT), @cr,@cr,
+	    "*", @tab to 6,
+	    "title", @tab (size(TITLE)-4),
+	    "resource", @tab (size(RES.NAME)-7),
+	    " hours  remain",@cr,@cr
+    end
+    report.footing print @cr,"legend (*):",@cr,
+	"  $    incentive project",@cr,
+	"  O    ongoing",@cr,
+	"  C    completed",@cr,
+	"  I    in progress",@cr,
+	"  P    pending",@cr,
+	@cr
+
+procedure VISIT
+begin if 
+    (LEVEL >= LEVEL1 and <= LEVEL2) and
+    ( 	(KIND = 1) or
+	(ACT.BEG # default and <= DATE2) or 
+	(EST.BEG # default and <= DATE2)    ) and
+    (ACT.FIN = default or >= DATE1) 
+    then begin
+	move default to TS.RES
+	include text "TASK.SUM"
+	if (HOURS # 0) or (KIND = 2) then begin
+	    if ACT.FIN # default then print "C"
+	    else if ACT.BEG # default then print "I"
+	    else if KIND = 2 then print "P"
+	    else if KIND = 1 then print "O"
+	    if VALUE # default then print "$"
+	    print
+		@tab to 6,
+		TITLE, @tab 1,
+		RES.NAME(RES via RES.ID=LDR), @tab 1,
+		HOURS, @tab 2,
+		REMAIN, @cr
+	end
+    end 
+end %VISIT%
+
+include text "TRAVERSE"
+
+write report
+    apply TRAVERSE (ROOT)
+
+end
+
