@@ -1,0 +1,223 @@
+From: WRS on Sep 24, 1981
+The sequence
+  backup LEVEL.DIR
+  restore LEVEL.DIR
+yields the message
+  LEVEL.DIR declaration has changed since the backup was created.
+In fact the definition of LEVEL.DIR has never changed since the schema
+was written.  Furthermore, the schema has not been recntly recompiled.
+
+From: WRS on Sep 24, 1981
+RES.ID is not properly recognized by MTX.  -Bill
+
+From: WRS on Sep 24, 1981
+Take . out of FIND command in UPDATER.  -Bill
+[changed 9/24/81]
+
+From: WRS on Sep 24, 1981
+Non-terminal nodes appear in listings made with LIST [criteria].  They
+should only appear in LIST with no criteria specified.  -Bill
+[fixed 9/24/81]
+
+From: WRS on Sep 24, 1981
+The BUG procedure doesn't add blank line to end if exit via ^D.  -Bill
+[fixed 9/24/81]
+
+From: WRS on Sep 24, 1981
+UPDATE doesn't do case conversion on some fields which need it when
+prompting for them seperately.  For example,
+  ASSIGN #123
+  carb
+Doesn't shift carb up.  -Bill
+
+From: WRS on Sep 24, 1981
+The SCHEDULE commands in UPDATE should take qQyy as a date format
+meaning to schedule the project for the first day of that quarter.
+-Bill
+
+From: WRS on Sep 24, 1981
+LOAD.PROJECTS screws up DOE at random.  -Bill
+[fixed 9/24/81]
+
+From: WRS on Sep 24, 1981
+The TIME.SHEETS procedure GEN command does not generate P records for
+the LDR or MGR resource unless they also have TASKs assigned.  -Bill
+[fixed 9/24/81]
+
+From: WRS on Sep 24, 1981
+TIME.SHEETS commands do not allow lists of resources or filenames.  -Bil
+[fixed 9/24/81]
+
+From: WRS on Sep 24, 1981
+QUOTA may not properly reflect the incentive plan definition.  -Bill
+
+From: WRS on Sep 24, 1981
+The MGR field is redundant.  Eliminate MGR, rename LDR as PRIN (principl
+resource) and introduce LEAD (real project leader).  LEAD will not get
+incentives initially but this may be the thing to do after discussing it
+with Sherman and Ken.  PRIN and RES.MGR(RES via RES.ID=PRIN) will get
+incentives.  LEAD will see all reports, as will RES.MGR(RES via RES.ID=L
+Most procedures will have to be changed.  -Bill
+
+From: MCH on Sep 25, 1981
+I got into real trouble with updater.  I don't know whether there is a
+bug or if I just could not understand the help messages.  I simply
+wanted to add a completion date to a project.  I kept getting
+complaints about a syntax error when I tried something like
+    FINISH node date
+
+From: MCH on Sep 25, 1981
+UPDATER needs an "unfinish" to clear a finish date (someone decides that
+they forgot to do something after they thought they were done) and perha
+an UNBEGIN to clear a start date.
+[implemented UNASSIGN, UNBEGIN, UNCANCEL, and UNFINISH  9/27/81]
+
+From: MCH on Oct 10, 1981
+I'm having a problem with completed projects and PD.  When I use it
+on a node with an actual finish date, I only get the header page and
+nothing about the project itself.  We need some way of doing this,
+especially since Ken likes to keep the milestones on current quarter
+projects in a notebook and I'd like to be able to give him a copy of
+the proj. desc. on individual milestones as we get them done.  /Mike
+
+From: MCH on Oct 10, 1981
+I got an error message while purging a node this evening.  It looked
+like the procedure wanted to write on a log file and couldn't.  I
+was being well-behaved and didn't have anything more than SY set at
+the time, so it may just be a file protection problem.      /Mike
+[changed (TYMXMTS)PURGE.LOG protection to ALL ALL NO (ugh) 10/12/81]
+
+From: MCH on Oct 19, 1981
+Is CANCEL implemented yet?  If so, what (if anythng) is it supposed to
+effect (e.g., I tried using CANCEL in UPDATER, and I didn't get any
+complaints, but there appears to be no obvious change.  It doesn't
+seem to show up on the reports).
+
+From: MCH on Oct 19, 1981
+Things seem to get a little confused if you ask for a preliminary milestone
+report starting at a terminal node.  for example, try node no. 346.
+
+From: MCH on Oct 21, 1981
+The final milestone report does not seem to pick up actual start and
+finish dates right.  see node 432 for an example.  ALSO, it seems to
+bick up the estimate ONLY from the task records.  It seems to ignore
+the EHRS time altogether.  And on final milestones you don't even
+get an error if the estimate is 0.  I think that the "EHRS" field
+should be the official one, rather than totalling task figures--but
+that needs dicussion.  Also, when we do 3Q incentives, I may need
+some help "fixing up" the languages stuff as a result.  (I don't
+know what UPDATER does when you change estimated hours--does it
+fiddle a task or does it do what I would expect and modify EHRS?)
+
+From: MCH on Oct 21, 1981
+The PD (project description report) includes a report of the number
+of hours spent on a task so far--but it ONLY picks up the most
+recent entry, ignoring anything else.  We may also need some
+discussion of how to do it--should it be total to date or total
+duirng the quarter for which the report is generated?  (Or does
+PD ignore a date specification?)
+
+From: MCH on Oct 21, 1981
+IF PD ignores date descriptions, it MIGHT be useful to be able to
+get a report in the same format for completed projects.
+
+From: MCH on Oct 21, 1981
+There are two important inconsistencies betwen UPDATER and MTX
+1.  As we discussed, it seems best to require a "#" in front of
+    a node number in MTX so that it is the same in both places.
+2.  Input format for dates is different, e.g., UPDATER expects
+    70581 where MTX expects 7/5/81.
+
+From: MCH on Oct 21, 1981
+I think it would be nice if the preliminary milestone report did NOT
+include projects that have estimated starts BEYOND the END of the
+period for which they are generated.  This seems important to help
+us focus on what we really do have planned--especially as we accumulate
+more projects that are either unscheduled or planned to start awhile
+down the road.
+
+From: MCH on Oct 21, 1981
+Re: Project Description report.
+A node that has nodes beneath it gives a list of subprojects.  That
+list includes projects which have been completed.  I suggest either
+not including those, or else show the actual completion date so that
+the reader does not get confused (and possibly frustrated) by looking
+for a description that is not there.
+
+From: MCH on Oct 21, 1981
+Re:  Project Description report.
+In the index at the end, page numbers are only given for milestone
+projects.  This sometimes requires some messing around to find a
+non-milestone project that is included in the report.
+
+From: WRS on Oct 30, 1981
+Need to have KIND=3 meaning per quarter per person.
+
+From: WRS on Nov 18, 1981
+The TASK.SUM sub-procedure seems to be confusing explicit remaining hours
+specifications with implicit ones.  The result is that computed remaining
+hours are being applied to the 10% rule to update quota/budget estimates.
+[changed QUOTA = REMAIN - HOURS to QUOTA = REMAIN + HOURS  -WRS 11/18/81]
+
+From: MCH on Nov 18, 1981
+HORRIBLE UPDATER BUG!!!!!
+If a routine detects a parsing error it should NOT (NO!! NO!! NO!!
+NO!!) alter anything.  I made the mistake of giving something like
+FINISH 712 101281
+instead of
+FINISH #712 101281
+and wound up with an actual finish date of today on every single
+active node that I had at the time--over 50.  I now get to
+reenter the actual finish on everything that is done.
+UGGH!!  (at least I was able to UNFINISH everything easily and
+so I don't have an absolutely horrendous amount of work ahead of
+me since well under half the nodes are supposed to have actual
+finish dates.)
+
+From: MCH on Nov 23, 1981
+Showing the total no. of hrs. when loading a time sheet is a nifty idea.
+But for legibility, you need a space, e.g., currently you get something
+like "Nov2044.0 hours" which is hard to read.  /Mike
+[changed to output leading balnk - also handles multiple R records -WRS]
+
+From: WRS on Nov 24, 1981
+I figured out where finish dates are going!  If you
+   1. generate timesheet for week 1
+   2. generate timesheet for week 2
+   3. fill out #1 showing a finish date for project X
+   4. load timesheet #1
+   5. fill out #2 ignoring the entries for project X since its finished
+   6. load timesheet #2
+it will clear the finish date for project X since when timesheet #2 was
+generated, the project had no finish date, so none was supplied by MTS,
+and when you filled it out, you ignorred the project because there was no
+change, timesheet #2 showed a default finish date.
+[Fixed by not allowing a TIME.SHEET to clear a begin/finish date.
+Specifying a default FINISH date in a timesheet for a project which
+already has a finish date in the relation will have no effect.
+Time sheets may still set/change begin/finish dates.   24-NOV-81 WRS]
+
+From: MCH on Dec 19, 1981
+Some day it might be nice to add a command to updater that would let
+you change the manager of a (group of) projects.   /Mike
+
+From: MCH on Dec 19, 1981
+(RE)LOAD.PROJECT:  Because things tend to get tacked on to the front of
+an already moderatley long LINE when projects are dumped, lines can get
+clipped.  I was nicely burned tonight by that with history entries where
+the origional lines had been nearly 80 chars long, so they got zap
+
+From: MCH on Dec 19, 1981
+Reload.project seems to be broken.  (Or else LP may be.)  When
+reloading existing projects, pointers seem to get messed up and
+the procedure aborts.
+
+ From: MCH on Jun 26, 1982
+   Bill,
+     If you want to see the changes that I made to UPDATER, you can DIFFER
+  update.new with update.old on (TYMXMTS).  But it all seemed pretty
+  straightforward.  /Mike
+
+   From: DELANEY on Jun 30, 1982
+    
+   D0k{
