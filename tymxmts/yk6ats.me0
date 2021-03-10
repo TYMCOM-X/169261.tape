@@ -1,0 +1,46 @@
+profile MTS.PROFILE for schema MTS
+begin
+
+schema directory protected ALL UPDATE NO
+data.base.administrator is "WRS"
+commands allow (WHY, QUIT, LOGOUT)
+user.set DBA is data.base.administrator
+user.set MAINTAINR is "LOIS","TSUCOOP"
+user.set MGRS is DBA,MAINTAINR,"TODD","MCH","ADELE"
+user.set STAFF is MGRS,"MATOKA","DARREN","SDANIELS","CARL","HIATT","TJB","KEN"
+
+all relations stored in "TYMXMTS" protected ALL ALL NO
+    delete = DBA
+    restore = MGRS
+    backup = same
+    update = STAFF
+    read = same
+
+all procedures protected ALL ALL NO
+    delete = STAFF
+    run = same
+
+all texts protected ALL ALL NO
+    delete = STAFF
+    compile = same
+    modify = same
+    examine = same
+    do = same
+
+all users 
+    commands 
+	allow (WHY,QUIT,LOGOUT)
+
+text LOCK.MESSAGE protected ALL ALL NO
+    delete = DBA
+    compile = same
+    modify = same
+    examine = same
+    do = STAFF
+
+user MGRS 
+    commands 
+	allow (all)
+	restrict (PROFILE COMPILE)
+
+end
