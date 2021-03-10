@@ -1,0 +1,46 @@
+procedure ORG.CHART
+begin
+
+fields
+    I as "9N",
+    NAME as "12C"
+
+report to "*"
+    page.size 1
+    page.top @cr
+
+relation MGR.RES is
+    key	RES.MGR, RES.ID
+    data NAME
+
+for each RES
+    if RES.ID # default then 
+      if (RES.TERM.DATE = default or >= TODAY) then begin
+	move position(RES.NAME," ") to I
+	move substr(RES.NAME,1,1) + " " + substr(RES.NAME,I+1) to NAME
+        insert into MGR.RES
+    end
+
+move default to RES.ID
+write report
+for each MGR.RES via RES.MGR=RES.ID begin
+    print @tab to 1,NAME
+    for each MGR.RES via RES.MGR=RES.ID begin
+	print @tab to 16,NAME
+	for each MGR.RES via RES.MGR=RES.ID begin
+	    print @tab to 31,NAME
+	    for each MGR.RES via RES.MGR=RES.ID begin
+		print @tab to 46,NAME
+		for each MGR.RES via RES.MGR=RES.ID begin
+		    print @tab to 61,NAME,@cr
+		end
+		print @cr
+	    end
+	    print @cr
+	end
+	print @cr
+    end
+    print @cr
+end
+
+end
