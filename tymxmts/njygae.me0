@@ -1,0 +1,134 @@
+%internal% procedure GRAFT.NODE
+%
+calling sequence:
+
+    1. 	setup pointer fields in exactly one of these combinations:
+	a.  UP setup, PRED,SUCC default
+	b.  PRED setup, UP,SUCC default
+	b.  SUCC setup, UP,PRED default
+    2. 	apply GRAFT.NODE
+%
+begin
+%
+	retrieve pointers for old position
+%
+    select NODE via key then begin
+	move UP to DELETE.UP
+	move PRED to DELETE.PRED
+	move SUCC to DELETE.SUCC
+    end else abort "?GRAFT.NODE: attempt to graft non-existant node",@cr,
+	"?",@9,"ID      ",ID,@cr
+%
+	save/compute pointers for new position
+%
+    move ID to INSERT.ID
+    move UP to INSERT.UP
+    move PRED to INSERT.PRED
+    move SUCC to INSERT.SUCC
+    if UP # default 
+	then select NODE via (ID=INSERT.UP)
+	    then begin
+		move DN to INSERT.ID1
+		if INSERT.ID # INSERT.ID1
+		    then move INSERT.ID1 to INSERT.PRED
+		while INSERT.ID1 # default do begin
+		    if INSERT.ID # INSERT.ID1 
+			then move INSERT.ID1 to INSERT.PRED
+		    select NODE via (ID=INSERT.ID1)
+			then move SUCC to INSERT.ID1
+		  	else abort
+			    "?GRAFT.NODE: node ",INSERT.ID1 as "8L",
+				" missing while scanning for end of DN list",@cr,
+			    "?",@9,"ID      ",ID,@tab 2,TITLE,@cr,
+			    "?",@9,"DN      ",DN,@cr
+		end
+	    end
+	    else abort 
+		"?GRAFT.NODE: parent node does not exist",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"UP      ",INSERT.UP
+    if DN # default 
+	then select NODE via (ID=INSERT.DN)
+	    then if UP = INSERT.ID then nothing else abort
+		"?GRAFT.NODE: attempt to reown non-orphan",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"DN      ",INSERT.DN
+	    else abort
+		"?GRAFT.NODE: child node does not exist",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"DN      ",INSERT.DN
+    if PRED # default 
+	then select NODE via (ID=INSERT.PRED)
+	    then begin
+	    	move UP to INSERT.UP
+		move SUCC to INSERT.SUCC
+	    end
+	    else abort 
+		"?GRAFT.NODE: predecessor node does not exist",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"PRED    ",INSERT.PRED
+    if SUCC # default 
+	then select NODE via (ID=INSERT.SUCC)
+	    then begin
+	    	move UP to INSERT.UP
+		move PRED to INSERT.PRED
+	    end
+	    else abort 
+		"?GRAFT.NODE: successor node does not exist",@cr,
+		"?",@9,"ID      ",INSERT.ID,@tab 2,TITLE,@cr,
+		"?",@9,"SUCC    ",INSERT.SUCC
+%
+	check for potential loops
+%
+    if ID = UP or PRED or SUCC 
+	then abort "?GRAFT.NODE: operation would create loop",@cr
+    move INSERT.UP to INSERT.ID1
+    while INSERT.ID1 # default do begin
+	select NODE via (ID=INSERT.ID1)
+	    then move UP to INSERT.ID1
+	    else abort "?GRAFT.NODE: non-existant up node: ",INSERT.ID1,@cr
+	if INSERT.ID = INSERT.ID1 
+	    then abort "?GRAFT.NODE: operation would create loop",@cr
+    end
+%
+	remove the node from its old position
+%
+    if DELETE.PRED # default
+	then select NODE via (ID=DELETE.PRED)
+	    then alter NODE using (DELETE.SUCC for SUCC) 
+	    else abort "?GRAFT.NODE: non-existant predecessor",@cr,
+		"?",@9,"ID      ",ID,@cr,
+		"?",@9,"PRED    ",DELETE.PRED,@cr
+	else select NODE via (ID=DELETE.UP)
+	    then alter NODE using (DELETE.SUCC for DN) 
+	    else abort "?GRAFT.NODE: non-existant parent",@cr,
+		"?",@9,"ID      ",ID,@cr,
+		"?",@9,"UP      ",DELETE.UP,@cr
+    if DELETE.SUCC # default 
+	then select NODE via (ID=DELETE.SUCC)
+	    then alter NODE using (DELETE.PRED for PRED)
+	    else abort "?GRAFT.NODE: non-existant successor",@cr,
+		"?",@9,"ID      ",ID,@cr,
+		"?",@9,"SUCC    ",DELETE.SUCC,@cr
+%
+	insert the node in its new position
+%
+    if INSERT.PRED # default
+	then select NODE via (ID=INSERT.PRED)
+	    then alter NODE using (INSERT.ID for SUCC)
+	    else nothing
+	else select NODE via (ID=INSERT.UP)
+	    then alter NODE using (INSERT.ID for DN)
+	    else nothing
+    if INSERT.SUCC # default
+	then select NODE via (ID=INSERT.SUCC)
+	    then alter NODE using (INSERT.ID for PRED)
+	    else nothing
+    select NODE via key
+	then alter NODE using (
+	    INSERT.UP for UP,
+	    INSERT.PRED for PRED,
+	    INSERT.SUCC for SUCC )
+	else abort "?GRAFT.NODE: node being grafted vanished!",@cr,
+	    "?",@9,"ID      ",ID,@cr
+end
