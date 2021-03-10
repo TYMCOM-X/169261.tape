@@ -1,0 +1,402 @@
+procedure LOAD.PROJECTS (CMD,OFILE,IFILE)
+begin
+
+controls for relations concurrent update
+controls for GLOBAL.VAR checkpoint.on.update
+
+field
+	L as "132C",
+	S as "132C",
+	S1 as "132C",
+	I as "5N",
+        INS.CNT as "5ZN",
+	ERROR.FLAG as "5ZN",
+	ERROR.CNT as "5ZN",
+	INPUT.CNT as "5ZN",
+	CONT.FLAG as "N",
+	RELOAD.FLAG as "9N",
+	F.NAME as "10C",
+	F.DATA as "132C",
+	ID. same as ID,
+	UP. same as UP,
+	DN. same as DN,
+	PRED. same as PRED,
+	SUCC. same as SUCC,
+	DOE. same as DOE,
+	REMARK. same as REMARK,
+	PARSE.BREAK as "1C"
+
+source INPUT.DATA from IFILE
+    fixed form
+    input L,@cr
+
+relation INPUT.TMP is
+    key     INPUT.CNT
+    data    L
+
+report LOAD.ERRORS to OFILE
+    page.size 1
+    page.top @cr
+    report.heading print
+	";LOAD ",trim(IFILE),@cr, 
+	";",today as date "WWW DD-MMM-YY ",
+	(TIME / 3600) as "ZN",":",
+	(TIME / 60 mod 60) as "NN",":",
+	(TIME mod 60) as "NN",
+	" by ",trim(USER.NAME),@cr,@cr
+    report.footing print @cr,@ff
+
+%
+	internal procedures
+%
+include text "NEW.NODE"
+include text "INSERT.NODE"
+include text "DELETE.NODE"
+
+procedure PARSE (SS,T1)
+%
+        PARSE: removes 1 token from SS and stores in T1
+        PARSE.BREAK is a character constant which determines the break set
+%
+begin
+    % field T %
+    while (length(SS) gt 0) and (substr(SS,1,1) eq @32 or @9) do
+	move substr(SS,2) to SS
+    move position(SS,PARSE.BREAK) to T
+    if T=0 then move length(SS)+1 to T	  
+    if substr(SS,1,T-1) is T1 
+	then move substr(SS,1,T-1) as T1 to T1
+	else begin
+	    add 1 to INPUT.CNT,ERROR.CNT
+	    insert into INPUT.TMP using (
+		';?illegal field value' for L)
+	end
+    move substr(SS,T+1) to SS
+end
+
+procedure PUT.DATA (DF)
+begin
+    if F.DATA is DF
+	then move F.DATA as DF to DF
+	else begin
+	    add 1 to INPUT.CNT,ERROR.CNT
+	    insert into INPUT.TMP using (
+		";?illegal field value" for L)
+	end
+end
+
+procedure PUT.STRING (STR)
+begin
+    if F.DATA is STR
+	then move upper.case(F.DATA) as STR to STR
+	else begin
+	    add 1 to INPUT.CNT,ERROR.CNT
+	    insert into INPUT.TMP using (
+		";?illegal field value" for L)
+	end
+end
+
+%
+	initialization
+%
+if (position(OFILE,".") = 0) and (position("TERMINAL",trim(OFILE)) # 1) 
+    then move trim(OFILE)+".ERR" to OFILE
+
+conditional on CMD begin
+    "LOAD": move 0 to RELOAD.FLAG
+    "RELOAD": move 1 to RELOAD.FLAG
+end else abort "?PROJECTS.LOAD: illegal command: ",trim(CMD)
+
+move "," to PARSE.BREAK
+move default to ID, INS.CNT
+move 0 to ERROR.CNT,INPUT.CNT
+move 1 to ERROR.FLAG
+
+write report LOAD.ERRORS begin
+
+for each INPUT.DATA 
+  LOAD.LOOP: begin
+    add 1 to INPUT.CNT
+    insert into INPUT.TMP 
+    if (length(L)=0) or (substr(L,1,1)=";") then finish LOAD.LOOP
+    if substr(L,1,1)= " " or @9 
+	then begin 	% continuation %
+	    move L to F.DATA
+	    move 1 to CONT.FLAG
+	end
+ 	else begin 	% non-continuation %
+	    move upper.case(substr(L,1,position(L,",")-1)) to F.NAME
+	    move substr(L,position(L,",")+1) to F.DATA
+	    move 0 to CONT.FLAG
+	end
+    while (length(F.DATA) gt 0) and (substr(F.DATA,1,1) eq " " or @9) do
+	move substr(F.DATA,2) to F.DATA
+
+%
+	handle ID record
+%
+if F.NAME = "ID" then begin
+    type @cr
+    if ERROR.CNT = ERROR.FLAG
+	then begin
+	    apply INSERT.NODE
+	    add 1 to INS.CNT end
+	else if ERROR.CNT > 0 then begin
+	    print to LOAD.ERRORS 
+		@cr,";?",(ERROR.CNT-ERROR.FLAG) as "ZN"," errors",@cr
+	    type "?",(ERROR.CNT-ERROR.FLAG) as "ZN"," errors",@cr
+	    if ID = default then begin
+		print to LOAD.ERRORS ";?node not inserted",@cr
+		type "?node not inserted",@cr end
+	    for each INPUT.TMP if INPUT.CNT # INPUT.CNT of procedure then
+		print to LOAD.ERRORS trim(L),@cr
+	    print to LOAD.ERRORS @cr,@ff end
+    delete from INPUT.TMP all
+    insert into INPUT.TMP
+    move ERROR.CNT to ERROR.FLAG
+
+%	break apart ID, line... ID, id,keyword id
+%
+    move default to UP,DN,PRED,SUCC
+    move USER.NAME to UNAME
+    apply PARSE (F.DATA,NICKNAME) move upper.case(NICKNAME) to NICKNAME
+    if NICKNAME = default then apply NEW.NODE (ID)
+    else if NICKNAME is ID then move NICKNAME as ID to ID
+    else select NICKNAMES via key then move ID to ID of procedure
+    else begin
+	apply NEW.NODE (ID)
+	insert into NICKNAMES end
+    move " " to PARSE.BREAK
+    apply PARSE (F.DATA,S) move upper.case(S) to S
+    apply PARSE (F.DATA,NICKNAME) move upper.case(NICKNAME) to NICKNAME
+    move "," to PARSE.BREAK
+    conditional on S begin
+	" " or "UNDER" or "AFTER" or "BEFORE": nothing
+    end else move S to NICKNAME
+    if NICKNAME is ID
+	then move NICKNAME as ID to ID.
+	else select NICKNAMES via key
+	    then move ID to ID.
+	    else begin add 1 to INPUT.CNT,ERROR.CNT 
+		move default to ID of procedure
+	    	insert into INPUT.TMP using (
+		    ";?expected parent or sibling ID or NICKNAME" for L) 
+	    	finish LOAD.LOOP 
+	    end
+    conditional on S begin
+	" ": nothing
+	"UNDER": move ID. to UP
+	"AFTER": move ID. to PRED
+    	"BEFORE": move ID. to SUCC
+    end else move ID. to UP
+    if F.DATA # default then type "?extraneous data ignored",@cr,
+	"?",@9,trim(L),@cr
+    if UP # default then select NODE via (ID=UP)
+	then nothing
+	else begin
+	    move default to ID
+	    add 1 to INPUT.CNT,ERROR.CNT
+	    insert into INPUT.TMP using (
+	        ';?"UP" node does not exist' for L)
+	    finish LOAD.LOOP end
+    else if PRED # default then select NODE via (ID=PRED)
+	then nothing
+	else begin
+	    move default to ID 
+	    add 1 to INPUT.CNT,ERROR.CNT
+	    insert into INPUT.TMP using (
+		';?"PRED" node does not exist' for L)
+	    finish LOAD.LOOP end
+    else if SUCC # default then select NODE via (ID=SUCC)
+	then nothing
+	else begin
+	    move default to ID 
+	    add 1 to INPUT.CNT,ERROR.CNT
+	    insert into INPUT.TMP using (
+		';?"SUCC" node does not exist' for L)
+	    finish LOAD.LOOP end
+    else if ID # 1 then begin
+	move default to ID
+	add 1 to INPUT.CNT,ERROR.CNT
+  	insert into INPUT.TMP using (
+	    ';?UNDER, AFTER or BEFORE expected' for L)
+	finish LOAD.LOOP end
+    select NODE via key
+	then if RELOAD.FLAG = 1 
+	    then begin
+	    	move DN to DN of procedure
+		move default to DN     % fake out DELETE.NODE %
+		apply DELETE.NODE
+		type "replacing ",ID,@tab 5 end
+	    else begin
+		move default to ID
+		add 1 to INPUT.CNT,ERROR.CNT
+		insert into INPUT.TMP using (
+		    ';?node already exists: '+trim(TITLE) for L)
+		type "?ignoring ",ID,@tab 5 
+		finish LOAD.LOOP end
+	else type "inserting ",ID,@tab 5
+    for each PREREQ via ID
+	delete from DEPEND via (ID=PREREQ.ID)
+    delete from PREREQ via ID
+    for each DEPEND via ID
+	delete from PREREQ via (ID=DEPEND.ID)
+    delete from DEPEND via ID
+    delete from NODE.TEXT via ID
+    delete from NODE.HIST via ID
+    delete from TASK via ID
+    move default to TITLE,MGR,LDR,IMPORTANCE,CLASS,VALUE,REMARK,
+	EST.HRS,EST.BEG,EST.FIN, ACT.HRS,ACT.BEG,ACT.SUS,ACT.CAN,ACT.FIN,
+	KIND,LEVEL
+    move today to DOE
+end
+
+%
+	handle fields
+%
+conditional on F.NAME begin
+    " " or "ID": nothing
+    "NICK": begin
+	apply PARSE (F.DATA,UNAME)
+	move upper.case(UNAME) to UNAME
+	move upper.case(F.DATA) to NICKNAME
+	select NICKNAMES via key
+	    then if ID # ID of procedure
+		then begin 
+		    add 1 to INPUT.CNT,ERROR.CNT
+		    insert into INPUT.TMP using (
+			";?nickname already in use - ignorred" for L)
+		end
+		else nothing
+	    else insert into NICKNAMES
+    end
+    "TITL" or "TITLE": begin
+	apply PUT.DATA (TITLE)
+	type TITLE,@tab 5
+    end
+    "DESC" or
+    "REMA" or "REMARK" or 
+    "CRIT": begin
+	move substr(F.NAME,1,1) to FIELD.ID
+	move F.DATA to LINE
+	if ID # default then 
+	    select largest NODE.TEXT via (ID,FIELD.ID)
+		then insert into NODE.TEXT using (CNT+1 for CNT,
+			LINE of procedure for LINE)
+		else insert into NODE.TEXT using (1 for CNT)
+    end
+    "HIST" or
+    "HISTI": begin
+	move DOE to DOE.
+	if F.NAME = "HISTI" 
+	    then begin % image %
+		apply PARSE (F.DATA,DOE)
+		apply PARSE (F.DATA,RES.ID)
+		move upper.case(RES.ID) to RES.ID
+	    end
+	    else % non-image %
+		move default to DOE,RES.ID
+	move F.DATA to LINE
+	if ID # default then 
+	    select largest NODE.HIST via (ID,DOE,RES.ID)
+		then insert into NODE.HIST using (CNT+1 for CNT,
+		    LINE of procedure for LINE)
+		else insert into NODE.HIST using (1 for CNT)
+	move DOE. to DOE
+    end
+    "MGR" or "MANA" or "MANAGER": apply PUT.STRING (MGR)
+    "LDR" or "LEAD" or "LEADER": apply PUT.STRING (LDR)
+    "VALU" or "VALUE": apply PUT.DATA (VALUE)
+    "DOE" or "DATE": apply PUT.DATA (DOE)
+    "IMPO" or "IMPOR" or "IMPORT": apply PUT.DATA (IMPORTANCE)
+    "LEVE" or "LEVEL": apply PUT.DATA (LEVEL)
+    "CLAS" or "CLASS": apply PUT.STRING (CLASS)
+    "EHRS" or "ESTHRS" or "ESTH": begin
+	move upper.case(F.DATA) to F.DATA
+	move "/" to PARSE.BREAK
+	apply PARSE (F.DATA,EST.HRS)
+	move "," to PARSE.BREAK
+	move 1 %ongoing% to KIND %assume ongoing%
+	conditional on F.DATA begin
+	    "D" or "DAY": move EST.HRS*5*13 to EST.HRS
+	    "W" or "WK" or "WEEK": move EST.HRS*13 to EST.HRS
+	    "M" or "MON" or "MONTH": move EST.HRS*3 to EST.HRS
+	    "Q" or "QTR" or "QUARTER": nothing  " ": move 2 %normal% to KIND 
+	end 
+	else begin
+	    move 2 to KIND
+	    add 1 to ERROR.CNT,INPUT.CNT
+	    insert into INPUT.TMP using (
+		";?/DAY, /WEEK, /MONTH or /QUARTER expected" for L)
+	end
+    end
+    "EBEG" or "ESTBEG" or "ESTB": apply PUT.DATA (EST.BEG)
+    "EFIN" or "ESTFIN" or "ESTF": apply PUT.DATA (EST.FIN)
+    "AHRS" or "ACTHRS" or "ACTH": apply PUT.DATA (ACT.HRS)
+    "ABEG" or "ACTBEG" or "ACTB": apply PUT.DATA (ACT.BEG)
+    "ASUS" or "ACTSUS" or "ACTS": apply PUT.DATA (ACT.SUS)
+    "ACAN" or "ACTCAN" or "ACTC": apply PUT.DATA (ACT.CAN)
+    "AFIN" or "ACTFIN" or "ACTF": apply PUT.DATA (ACT.FIN)
+    "CHAR" or "COST" or "CHARGE" or
+    "PRER" or "PREREQ" or
+    "DEPE" or "DEPEND": begin
+	add 1 to INPUT.CNT,ERROR.CNT
+	insert into INPUT.TMP using (
+	    ";?field not implemented" for L)
+    end
+    "TASK" or
+    "TASKI": begin
+	move DOE to DOE.
+        move default to DOE
+	apply PARSE (F.DATA,TASK.ID)
+	apply PARSE (F.DATA,RES.ID)
+	move upper.case(RES.ID) to RES.ID
+	if F.NAME="TASK"
+	    then move default to DOE,HOURS
+	    else begin
+		apply PARSE (F.DATA,DOE)
+		apply PARSE (F.DATA,HOURS) end
+	apply PARSE (F.DATA,REMAIN)
+	move F.DATA as REMARK to REMARK
+	if ID # default 
+	    then select TASK via key
+		then begin
+		    add 1 to ERROR.CNT,INPUT.CNT
+		    insert into INPUT.TMP using (
+			";?duplicate TASK exists" for L) end
+		else insert into TASK
+	move DOE. to DOE
+    end % TASK %
+end
+else begin
+    add 1 to INPUT.CNT,ERROR.CNT
+    insert into INPUT.TMP using (
+	';?unrecognized field name' for L)
+end
+
+%
+	clean up and go away
+%
+    	end %for each INPUT.DATA%
+    type @cr
+    if ERROR.CNT = ERROR.FLAG
+	then begin
+	    apply INSERT.NODE
+	    add 1 to INS.CNT end
+	else if ERROR.CNT > 0 then begin
+	    print to LOAD.ERRORS
+		@cr,";?",(ERROR.CNT-ERROR.FLAG) as "ZN"," errors",@cr
+	    type "?",(ERROR.CNT-ERROR.FLAG) as "ZN"," errors",@cr
+	    if ID = default then begin
+		print to LOAD.ERRORS ";?node not inserted",@cr
+		type "?node not inserted",@cr end
+	    for each INPUT.TMP if INPUT.CNT # INPUT.CNT of procedure then
+		print to LOAD.ERRORS trim(L),@cr
+	    print to LOAD.ERRORS @cr,@ff end
+end % write report %
+
+type INS.CNT," nodes",@cr,
+    ERROR.CNT," errors",@cr
+
+end
+    @I6
