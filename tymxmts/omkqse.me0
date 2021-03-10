@@ -1,0 +1,262 @@
+
+procedure EDIT.RES
+begin
+
+fields
+  I as '5N',
+  TTYLINE as '192C',
+  TCOM as '16C',
+  TARG as '192C',
+  FNAM as '64C',
+  FVAL as '64C'
+                
+source TTY from terminal fixed form input TTYLINE
+
+relation SEL is
+  key RES.ID
+
+procedure SCANTOKEN (SRC,TOK,REM)
+begin
+  move position(SRC,' ') to I
+  if I=0 then move length(SRC) to I
+  move upper.case(substr(SRC,1,I-1)) to TOK
+  move substr(SRC,I+1) to REM
+end
+
+TTYNEXT: begin type '>' for each TTY begin %TTYNEXT%
+  apply SCANTOKEN (TTYLINE,TCOM,TARG)
+  conditional on TCOM begin 
+    'F' or 'FI' or 'FIN' or 'FIND': begin 
+      for each RES 
+        select SEL via key
+          then nothing
+          else insert into SEL
+      while length(TARG)>0 do FINDLOOP: begin
+	type '.'
+        apply SCANTOKEN (TARG,FNAM,TARG)
+        apply SCANTOKEN (TARG,FVAL,TARG)
+        conditional on FNAM begin
+          'ALL': nothing
+          'RES.ID': begin
+	    if FVAL is not RES.ID then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as RES.ID to RES.ID
+	    delete from SEL where (RES.ID # RES.ID of EDIT.RES)
+	  end
+          'RES.NAME': begin
+	    if FVAL is not RES.NAME then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as RES.NAME to RES.NAME
+	    for each RES where (RES.NAME # RES.NAME of EDIT.RES)
+	      delete from SEL via key
+	  end
+          'RES.MGR': begin
+	    if FVAL is not RES.MGR then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as RES.MGR to RES.MGR
+	    for each RES where (RES.MGR # RES.MGR of EDIT.RES)
+	      delete from SEL via key
+	  end
+          'RES.UNAME': begin
+	    if FVAL is not RES.UNAME then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as RES.UNAME to RES.UNAME
+	    for each RES where (RES.UNAME # RES.UNAME of EDIT.RES)
+	      delete from SEL via key
+	  end
+          'RES.ROOT': begin
+	    if FVAL is not RES.ROOT then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as RES.ROOT to RES.ROOT
+	    for each RES where (RES.ROOT # RES.ROOT of EDIT.RES)
+	      delete from SEL via key
+	  end
+          'RES.NEW': begin
+	    if FVAL is not RES.NEW then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as RES.NEW to RES.NEW
+	    for each RES where (RES.NEW # RES.NEW of EDIT.RES)
+	      delete from SEL via key
+	  end
+        end
+        else type '?<field-name> or ALL expected: ',trim(FNAM),@cr
+      end 
+      type count(SEL),' records selected.',@cr 
+    end 
+    'A' or 'AL' or 'ALT' or 'ALTE' or 'ALTER': begin 
+      while length(TARG)>0 do ALTERLOOP: begin
+        apply SCANTOKEN (TARG,FNAM,TARG)
+        apply SCANTOKEN (TARG,FVAL,TARG)
+	for each SEL select RES via key then begin
+	    conditional on FNAM begin
+		'RES.ID': type @cr,'?cant ALTER key field: ',trim(FNAM),@cr 
+		'RES.NAME': begin
+		    if FVAL is not RES.NAME then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as RES.NAME to RES.NAME
+		end
+		'RES.MGR': begin
+		    if FVAL is not RES.MGR then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as RES.MGR to RES.MGR
+		end
+		'RES.UNAME': begin
+		    if FVAL is not RES.UNAME then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as RES.UNAME to RES.UNAME
+		end
+		'RES.ROOT': begin
+		    if FVAL is not RES.ROOT then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as RES.ROOT to RES.ROOT
+		end
+		'RES.NEW': begin
+		    if FVAL is not RES.NEW then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as RES.NEW to RES.NEW
+		end
+		'RES.TERM.DATE': begin
+		    if FVAL is not RES.TERM.DATE then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as RES.TERM.DATE to RES.TERM.DATE
+		end
+	    end
+	    else type '?<field-name> or ALL expected: ',trim(FNAM),@cr
+	    alter RES
+	end
+      end 
+    end 
+    'P' or 'PR' or 'PRI' or 'PRIN' or 'PRINT': Pcmd: for each SEL select RES via key
+    then begin
+      move TARG to FVAL
+      while length(FVAL)>0 do begin
+        apply SCANTOKEN (FVAL,FNAM,FVAL)
+        conditional on FNAM begin
+          'ALL': begin 
+            type 
+            RES.ID,' ',
+            RES.NAME,' ',
+            RES.MGR,' ',
+            RES.UNAME,' '
+            if RES.TERM.DATE # default then type RES.TERM.DATE,' ',
+            RES.ROOT,' ',
+            RES.NEW
+            else type '         ',
+            RES.ROOT,' ',
+            RES.NEW
+            end
+          'KEY' or 'KEYS': type 
+            RES.ID
+          'RES.ID': type RES.ID
+          'RES.NAME': type RES.NAME
+          'RES.MGR': type RES.MGR
+          'RES.UNAME': type RES.UNAME
+          'RES.TERM.DATE': if RES.TERM.DATE # default then type RES.TERM.DATE
+          'RES.ROOT': type RES.ROOT
+          'RES.NEW': type RES.NEW
+        end
+        else begin
+          type '?<field-name>, KEY or ALL expected: ',trim(FNAM),@cr
+          finish Pcmd
+        end
+        if length(FVAL)>0 then type ' ' else type @cr
+      end 
+    end
+    else type '?missing instance',@cr 
+    'L' or 'LI' or 'LIS' or 'LIST': Lcmd: for each SEL select RES via key
+    then begin
+      move TARG to FVAL
+      while length(FVAL)>0 do begin
+        apply SCANTOKEN (FVAL,FNAM,FVAL)
+        conditional on FNAM begin
+          'ALL': begin
+            type 
+            'RES.ID ',@tab to 24,RES.ID,@cr,
+            'RES.NAME ',@tab to 24,RES.NAME,@cr,
+            'RES.MGR ',@tab to 24,RES.MGR,@cr,
+            'RES.UNAME ',@tab to 24,RES.UNAME,@cr
+            if RES.TERM.DATE = default then type 
+            'RES.TERM.DATE',@cr,
+            'RES.ROOT ',@tab to 24,RES.ROOT,@cr,
+            'RES.NEW ',@tab to 24,RES.NEW,@cr
+            else type
+            'RES.TERM.DATE ',@tab to 24,RES.TERM.DATE,@cr,
+            'RES.ROOT ',@tab to 24,RES.ROOT,@cr,
+            'RES.NEW ',@tab to 24,RES.NEW,@cr
+            end
+          'KEY' or 'KEYS': type 
+            'RES.ID ',@tab to 24,RES.ID,@cr
+          'RES.ID': type 'RES.ID ',@tab to 24,RES.ID,@cr
+          'RES.NAME': type 'RES.NAME ',@tab to 24,RES.NAME,@cr
+          'RES.MGR': type 'RES.MGR ',@tab to 24,RES.MGR,@cr
+          'RES.UNAME': type 'RES.UNAME ',@tab to 24,RES.UNAME,@cr
+          'RES.TERM.DATE':  if RES.TERM.DATE = default then type 
+                             'RES.TERM.DATE' else type
+                            'RES.TERM.DATE ',@tab to 24,RES.TERM.DATE,@cr
+          'RES.ROOT': type 'RES.ROOT ',@tab to 24,RES.ROOT,@cr
+          'RES.NEW': type 'RES.NEW ',@tab to 24,RES.NEW,@cr
+        end
+        else begin
+          type '?<field-name>, KEY or ALL expected: ',trim(FNAM),@cr
+          finish Lcmd
+        end
+        if length(FVAL)=0 then type @cr
+      end 
+    end
+    else type '?missing instance',@cr 
+    'N' or 'NA' or 'NAM' or 'NAME' or 'NAMES': type
+        'fileds names are',@cr,
+        '  RES.ID -key',@cr ,
+        '  RES.NAME',@cr ,
+        '  RES.MGR',@cr ,
+        '  RES.UNAME',@cr ,
+        '  RES.TERM.DATE',@cr ,
+        '  RES.ROOT',@cr ,
+        '  RES.NEW',@cr 
+    '?' or 'H' or 'HE' or 'HEL' or 'HELP': type 
+        'enter one of',@cr,
+        '  FIND ALL             - select all instances',@cr,
+        '  FIND f1 v1 f2 v2 ... - select instances where field=val',@cr,
+        '  PRINT ALL            - print all fields for',@cr,
+        '  PRINT KEY            - print key fields for',@cr,
+        '  PRINT f1 f2 f3 ...   - print named fields',@cr,
+        '  LIST ALL             - list all fields',@cr,
+        '  LIST KEY             - list key fields',@cr,
+        '  LIST f1 f2 f3 ...    - list named fields',@cr,
+	'  ALTER f1 v1 f2 v2 ...- alter values of fields',@cr,
+        '  NAMES                - list names of fields',@cr,
+        '  QUIT',@cr,
+        '  HELP',@cr,
+        '  ?',@cr 
+    'Q' or 'QUIT': finish TTYNEXT
+  end
+  else type '?command not recognized: ',TCOM,@cr
+  type '>'
+end end %TTYNEXT%
+
+end %EDIT.RES%
+    
