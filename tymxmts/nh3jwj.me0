@@ -1,0 +1,1353 @@
+procedure UPDATER
+begin
+%
+    This procedure contains internal procedures to alter fields in
+    NODE.  Instances to be altered are either selected or a default
+    list for the username is used.  A help command lists fields that
+    can be changed.
+
+    EDIT HISTORY:
+
+    DESCRIPTION, CRITERIA and REMARK altered to print node id
+    and title and print entire text before acepting editing.
+    GRAFT changed to require "#" before node.
+    ROOT modified so it does something.  12-9-82  /L.Lindley
+    Changed KIND.  11-10-82/L.Lindley
+
+    Implemented SHOW command, added DESCRIPTION, CRITERIA and REMARK
+    commands.  Made default date for FINISH the latest task date
+    for that project.  10-31-82/L.Lindley
+
+    Added MANAGER, UNMANAGER, TITLE and SHOW commands. 10-19-82/L.Lindley
+    
+    Proceed check added for all major alterations that will change more
+    than one node.  9-9-82/L. Lindley
+%
+
+controls for relations concurrent update
+
+fields
+    I 		as '5N',
+    TCOM 	as '16C',
+    FARG 	as '192C',
+    FNAM 	as '64C',
+    FVAL 	as '64C',
+    TITLE.IN    as "30C",
+    TARG	as "10C",
+    NODE.CNT    as "3ZN",        % count of items selected %
+    PROCEED.FLAG as "N",
+    YES.OR.NO   as "10C",
+    OLDCNT      as "3N",
+    S		as "80C",
+    CMD		as "80C",
+    ARG 	as "80C",
+    LINE.IN     as "72C",    % for LINE for NODE.TEXT revisions %
+    FLAG        as "N",
+    XID		same as NICKNAME,
+    INDENT	as "5N",
+    PARSE.BREAK as "C"
+
+relation NODE. is
+%
+	nodes which have been "selected"
+%
+    	key	ID
+
+relation NEST. is
+%
+	used for producing nested output
+%
+	key	TRV.DEPTH
+	data	ID, TITLE, IMPORTANCE
+
+include text "PARSE"
+include text "GRAFT.NODE"
+
+procedure PROCEED.CHECK
+begin
+
+    if NODE.CNT = 1 then let PROCEED.FLAG = 1
+    else if NODE.CNT < 10 then
+      begin
+      type "[confirm] "
+      accept YES.OR.NO
+      if upper.case(substr(YES.OR.NO,1,1)) # 'N' then let PROCEED.FLAG = 1
+      else let PROCEED.FLAG = 0
+      end
+    else if NODE.CNT < 1 then
+      begin
+      type "No nodes selected"
+      let PROCEED.FLAG = 0
+      end
+    else
+      begin
+      type "Altering ",NODE.CNT as "5LN"," nodes.  [confirm] "
+      accept YES.OR.NO
+      if upper.case(substr(YES.OR.NO,1,1)) # 'Y' then let PROCEED.FLAG = 0
+      else let PROCEED.FLAG = 1
+      end
+end
+
+      
+      
+procedure FIND.ALL
+%
+	traverse the subtree starting at ROOT inserting nodes into NODE.
+%
+begin
+    delete from NODE. all
+    move ROOT to TRV.NEXT
+    move default to TRV.PREV,TRV.DEPTH,TRV.SEQ
+    do begin
+	move TRV.NEXT to TRV.ID
+	select NODE via (ID=TRV.ID)
+	    then begin
+		if TRV.PREV = default or PRED or UP
+		    then if DN = default 
+			then begin % terminal node %
+			    if SUCC # default
+				then move SUCC to TRV.NEXT
+				else move UP to TRV.NEXT
+			    move 2 to TRV.ORDER end
+			else begin % preorder %
+			    move DN to TRV.NEXT
+			    move 1 to TRV.ORDER end
+		    else begin % postorder %
+			if SUCC # default
+			    then move SUCC to TRV.NEXT
+			    else move UP to TRV.NEXT
+			move 3 to TRV.ORDER end
+		if (TRV.DEPTH = 0) and (TRV.ORDER = 2 or 3)
+		    then move default to TRV.NEXT
+		add 1 to TRV.SEQ
+		insert into NODE. on duplicate nothing
+		if TRV.NEXT = DN then add +1 to TRV.DEPTH
+		if TRV.NEXT = UP then add -1 to TRV.DEPTH
+		move TRV.ID to TRV.PREV
+	    end % select NODE then %
+	    else begin % BAD POINTER %
+		type @cr,
+		    "?TRAVERSE: pointer to non-existant node ",TRV.ID,
+		    " in node ",TRV.PREV,
+		    " field "
+		select NODE via (ID=TRV.PREV)
+		    then begin
+			if TRV.ID = DN then type "DN"
+			else if TRV.ID = SUCC then type "SUCC"
+			else if TRV.ID = UP then type "UP"
+			else type "??",@cr, 
+			    "?",@9,"can't find bad pointer in TRV.PREV"
+			abort @cr
+		    end
+		    else abort "??",@cr,
+			"?",@9,"can't find node TRV.PREV"
+	    end % select NODE else %
+    move count(NODE.) to NODE.CNT
+    end while TRV.NEXT # default
+end
+
+procedure PARSE.NODE
+begin
+    move @32 to PARSE.BREAK
+    apply PARSE(ARG,NICKNAME)
+    if NICKNAME is ID then move NICKNAME as ID to ID
+    else select NICKNAMES via key then move ID to ID of procedure
+    else begin 
+	type '?node "',trim(NICKNAME),'" not found',@cr
+	repeat COMMAND.BLOCK end
+    select NODE via key
+	then nothing
+	else begin
+	    type '?node ',ID as "8L",' not found',@cr
+	    repeat COMMAND.BLOCK end
+end
+
+procedure VISIT
+begin
+    conditional on TRV.ORDER begin
+    1: insert into NEST.
+    3: select NODE. via key 
+	then if TARG = default 
+	    then begin
+		for each NEST. begin
+		    type
+		    	ID as "6L", 
+		    	@tab to (8+TRV.DEPTH),
+		    	@27+"&dA",
+		    	trim(TITLE),
+		    	@27+"&d@"
+		    if IMPORTANCE # default then type 
+		    	@27+"&a73C",
+			"<",IMPORTANCE as "6L",">"
+		    type @cr
+		end
+	        delete from NEST. all
+	    end
+	    else delete from NEST. via key
+	else delete from NEST. via key
+    2: select NODE. via key then VISIT.BLOCK: begin
+	include text "GET.STATUS"
+	if (TARG # default) and (position(TARG,STATUS) = 0) 
+	    then finish VISIT.BLOCK
+	for each NEST. begin 
+	    type
+	    	ID as "6L", 
+	    	@tab to (8+TRV.DEPTH),
+	    	@27+"&dA",
+	    	trim(TITLE),
+	    	@27+"&d@"
+	    if IMPORTANCE # default then type 
+		@27+"&a73C",
+		"<",IMPORTANCE as "6L",">"
+	    type @cr
+	end
+	delete from NEST. all
+	type ID as "6L", 
+	    @tab to (8+TRV.DEPTH),
+	    trim(TITLE),
+	    @tab (40-length(TITLE)-TRV.DEPTH), 
+	    STATUS
+	if VALUE # default 
+	    then type "$ "
+	    else type "  "
+	conditional on STATUS begin
+	    "P": type EST.BEG
+	    "I": type ACT.BEG
+	    "S": type ACT.SUS
+	    "C": type ACT.CAN
+	    "F": type ACT.FIN
+	end else type @tab 6
+	type
+	    " ", LDR,
+	    " ", EST.HRS
+	conditional on KIND begin
+	    1: type "/qtr"
+	    2: type "    "
+	end else type "/K",KIND as "N"," "
+	if IMPORTANCE # default 
+	    then type " <",IMPORTANCE as "6L",">"
+	    else nothing
+	type @cr
+    end
+    end
+end
+include text "TRAVERSE"
+
+procedure FIND.COMMAND
+begin if ARG="?"
+    then type
+	"FIND command syntax:",@cr,
+	"  FIND [nodes] [attributes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  attributes is a list of one or more of the following attributes:",@cr,
+	"    ALL",@cr,
+	"    ID <val>",@cr,
+	"    UP <val>",@cr,
+	"    LEVEL <val>",@cr,
+	"    TITLE <val>",@cr,
+	"    MGR <val>",@cr,
+	"    LDR <val>",@cr,
+	"    DOE <date>",@cr,
+	"    SINCE <date> | <days> | Yesterday | LASTQuarter | LASTMonth | LASTWeek",@cr,
+	"    VALUE <val>",@cr,
+	"    EHRS <date> | EST.HRS <date>",@cr,
+	"    EBEG <date> | EST.BEG <date>",@cr,
+	"    EFIN <date> | EST.FIN <date>",@cr,
+	"    AHRS <date> | ACT.HRS <date>",@cr,
+	"    ABEG <date> | ACT.BEG <date>",@cr,
+	"    ASUS <date> | ACT.SUS <date>",@cr,
+	"    ACAN <date> | ACT.CAN <date>",@cr,
+	"    AFIN <date> | ACT.FIN <date>",@cr,
+	"    IMPORTANCE <val>",@cr,
+	"Selects a group of nodes for future operations.",@cr
+    else begin
+      while ARG # default do FINDLOOP: begin
+        apply PARSE (ARG,FNAM)
+        apply PARSE (ARG,FVAL)
+        conditional on FNAM begin
+          'ALL': nothing
+          'ID': begin
+	    if FVAL is not ID then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ID to ID
+	    delete from NODE. where (ID # ID of procedure)
+	  end
+          'UP': begin
+	    if FVAL is not UP then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as UP to UP
+	    for each NODE where (UP # UP of procedure)
+	      delete from NODE. via key
+	  end
+          'LEVEL': begin
+	    if FVAL is not LEVEL then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as LEVEL to LEVEL
+	    for each NODE where (LEVEL # LEVEL of procedure)
+	      delete from NODE. via key
+	  end
+          'TITLE': begin
+	    if FVAL is not TITLE then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as TITLE to TITLE
+	    for each NODE where (TITLE # TITLE of procedure)
+	      delete from NODE. via key
+ 	  end
+	  'MGR': begin
+ 	    if FVAL is not MGR then begin
+ 	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+ 	      repeat FINDLOOP
+ 	    end
+ 	    move FVAL as MGR to MGR
+ 	    for each NODE where (MGR # MGR of procedure)
+ 	      delete from NODE. via key
+ 	  end
+	  'LDR': begin
+ 	    if FVAL is not LDR then begin
+ 	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+ 	      repeat FINDLOOP
+ 	    end
+ 	    move FVAL as LDR to LDR
+ 	    for each NODE where (LDR # LDR of procedure)
+ 	      delete from NODE. via key
+ 	  end
+	  'DOE': begin
+ 	    if FVAL is not DOE then begin
+ 	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+ 	      repeat FINDLOOP
+ 	    end
+ 	    move FVAL as DOE to DOE
+ 	    for each NODE where (DOE # DOE of procedure)
+ 	      delete NODE. via key
+ 	  end
+	  'SINCE': begin
+	    if FVAL is DOE 
+		then move FVAL as DOE to DOE
+	    else if FVAL is "3ZN"
+		then move today-(FVAL as "3ZN") to DOE
+	    else if substr("YESTERDAY",1,length(FVAL))=FVAL
+		then move today-1 to DOE
+	    else if substr("LASTQUARTER",1,length(FVAL))=FVAL
+		then move today-92 to DOE
+	    else if substr("LASTMONTH",1,length(FVAL))=FVAL
+		then move today-31 to DOE
+	    else if substr("LASTWEEK",1,length(FVAL))=FVAL
+		then move today-7 to DOE
+ 	    else begin
+ 	      type @cr,'?illegal argument to SINCE:',@cr,
+		"?  date,number,YESTERDAY,LASTQUARTER,LASTMONTH,LASTWEEK expected",@cr
+ 	      repeat FINDLOOP
+ 	    end
+ 	    for each NODE where (DOE < DOE of procedure)
+ 	      delete from NODE. via key
+ 	  end
+	  'CLASS': begin
+	    if FVAL is not CLASS then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as CLASS to CLASS
+	    for each NODE where (position(CLASS,trim(CLASS of procedure))=0)
+	      delete from NODE. via key
+	  end
+          'VALUE': begin
+	    if FVAL is not VALUE then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as VALUE to VALUE
+	    for each NODE where (VALUE # VALUE of procedure)
+	      delete from NODE. via key
+	  end
+          'EHRS' or 'EST.HRS': begin
+	    if FVAL is not EST.HRS then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as EST.HRS to EST.HRS
+	    for each NODE where (EST.HRS # EST.HRS of procedure)
+	      delete from NODE. via key
+	  end
+          'EBEG' or 'EST.BEG': begin
+	    if FVAL is not EST.BEG then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as EST.BEG to EST.BEG
+	    for each NODE where (EST.BEG # EST.BEG of procedure)
+	      delete from NODE. via key
+	  end
+          'EFIN' or 'EST.FIN': begin
+	    if FVAL is not EST.FIN then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as EST.FIN to EST.FIN
+	    for each NODE where (EST.FIN # EST.FIN of procedure)
+	      delete from NODE. via key
+	  end
+          'AHRS' or 'ACT.HRS': begin
+	    if FVAL is not ACT.HRS then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ACT.HRS to ACT.HRS
+	    for each NODE where (ACT.HRS # ACT.HRS of procedure)
+	      delete from NODE. via key
+	  end
+          'ABEG' or 'ACT.BEG': begin
+	    if FVAL is not ACT.BEG then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ACT.BEG to ACT.BEG
+	    for each NODE where (ACT.BEG # ACT.BEG of procedure)
+	      delete from NODE. via key
+	  end
+          'ASUS' or 'ACT.SUS': begin
+	    if FVAL is not ACT.SUS then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ACT.SUS to ACT.SUS
+	    for each NODE where (ACT.SUS # ACT.SUS of procedure)
+	      delete from NODE. via key
+	  end
+          'ACAN' or 'ACT.CAN': begin
+	    if FVAL is not ACT.CAN then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ACT.CAN to ACT.CAN
+	    for each NODE where (ACT.CAN # ACT.CAN of procedure)
+	      delete from NODE. via key
+	  end
+          'AFIN' or 'ACT.FIN': begin
+	    if FVAL is not ACT.FIN then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ACT.FIN to ACT.FIN
+	    for each NODE where (ACT.FIN # ACT.FIN of procedure)
+	      delete from NODE. via key
+	  end
+          'IMPORTANCE': begin
+	    if FVAL is not IMPORTANCE then begin
+	      type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as IMPORTANCE to IMPORTANCE
+	    for each NODE where (IMPORTANCE # IMPORTANCE of procedure)
+	      delete from NODE. via key
+	  end
+        end
+        else type '?<field-name> or <keyword> expected: ',trim(FNAM),@cr
+      end 
+      move count(NODE.) to NODE.CNT
+      type "[",count(NODE.) as "9L"," nodes]",@cr
+    end
+end
+
+procedure ALTER.COMMAND
+begin
+    type "?ALTER: not implemented",@cr
+end
+
+procedure VALUE.COMMAND
+begin if ARG="?" 
+    then type 
+	"VALUE command syntax:",@cr,
+	"  VALUE [nodes] value",@cr,
+	"where ",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  value is the incentive value factor (default is 0)",@cr,
+	"Sets or changes incentive value factor.",@cr
+    else begin
+	apply PARSE(ARG,VALUE)
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key 
+		then alter NODE using (VALUE of procedure for VALUE)
+    end
+end
+
+procedure IMPORTANCE.COMMAND
+begin if ARG="?" 
+    then type 
+	"IMPORTANCE command syntax:",@cr,
+	"  IMPORTANCE [nodes] value",@cr,
+	"where ",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  value is the importance (0=unassigned,1=highest)",@cr,
+	"Sets or changes importance.",@cr
+    else begin
+	apply PARSE(ARG,IMPORTANCE)
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key 
+		then alter NODE using (IMPORTANCE of procedure for IMPORTANCE)
+    end
+end
+
+procedure HOURS.COMMAND
+begin if ARG="?" 
+    then type 
+	"HOURS command syntax:",@cr,
+	"  HOURS [nodes] hours [switch]",@cr,
+	"where ",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	'  hours is the estimated hours as "ZZZZ.Z"',@cr,
+	"  switch is one of /QTR /MONTH /WEEK /DAY",@cr,
+	"      /PQTR /PMONTH /PWEEK /PDAY",@cr,
+	"Sets or changes estimated hours.",@cr
+    else begin
+	move "/" to PARSE.BREAK
+	apply PARSE(ARG,EST.HRS)
+	move 1 to KIND 		% assume ongoing %
+	if substr(ARG,1,1)="P" then begin
+	    move 3 to KIND	% assume ongoing per body %
+	    move substr(ARG,2) to ARG
+	end
+	conditional on ARG begin
+	    "QUARTER" or "QTR" or "Q": nothing
+	    "MONTH" or "MON" or "M": move EST.HRS * 3 to EST.HRS
+	    "WEEK" or "W": move EST.HRS * 13 to EST.HRS
+	    "DAY" or "D": move EST.HRS * 92 to EST.HRS
+	    " ": move 2 to KIND
+        end else begin
+	    type '?unrecognized switch "/',trim(ARG),'"',@cr,
+	    '?type "?" for help',@cr
+	    repeat COMMAND.BLOCK
+        end
+	for each NODE. select NODE via key then begin
+	    move EST.HRS of procedure to EST.HRS
+	    move KIND of procedure to KIND
+	    alter NODE 
+        end
+    end
+end
+
+procedure ROOT.COMMAND
+begin if ARG="?" 
+    then type 
+	"ROOT command syntax:",@cr,
+	"  ROOT node",@cr,
+	"where node is a node id or nickname",@cr,
+	"Sets the root node for future scans.",@cr
+    else 
+      begin
+      move ID  as ROOT to ROOT
+      select NODE via ID
+          then apply FIND.ALL
+          else type "%ROOT ",ROOT as "9L"," does not exist: ",@cr
+      type "[",count(NODE.) as "9L", " nodes]",@cr
+      move count(NODE.) to NODE.CNT
+      end
+
+end
+
+procedure LIST.COMMAND
+begin if ARG="?"
+    then type
+	"LIST/PRINT command syntax:",@cr,
+	"  LIST [nodes] [modifiers]",@cr,
+	"  PRINT [nodes] [modifiers]",@cr,
+	"where ",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  modifiers is a list of one or more of",@cr,
+	"    ONGOING",@cr,
+	"    UNSCHEDULED",@cr,
+	"    PENDING",@cr,
+	"    INPROGRESS",@cr,
+	"    SUSPENDED",@cr,
+	"    CANCELED",@cr,
+	"    FINISHED",@cr,
+	"    ALL",@cr,
+	"Prints a brief list of the selected nodes.",@cr
+    else begin
+	move default to TARG
+        while ARG # default do begin
+	    apply PARSE(ARG,S)
+	    conditional on S begin
+	        "ONGOING" or "ONGO" or "ONG" or "ON" or "O":
+		    move "O"+trim(TARG) to TARG
+	        "UNSCHEDULED" or "UNSCHED" or "UNS" or "UN" or "U":
+		    move "U"+trim(TARG) to TARG
+	        "SUSPENDED" or "SUSPEND" or "SUSP" or "SUS" or "SU" or "S":
+		    move "S"+trim(TARG) to TARG
+	        "PENDING" or "PEND" or "PEN" or "PE" or "P":
+		    move "P123456789"+trim(TARG) to TARG
+	        "INPROGRESS" or "INPROG" or "INP" or "IN" or "I":
+		    move "I"+trim(TARG) to TARG
+	        "CANCELED" or "CANCEL" or "CANC" or "CAN" or "CA" or "C":
+		    move "C"+trim(TARG) to TARG
+	        "FINISHED" or "FINISH" or "FINI" or "FIN" or "FI" or "F":
+		    move "F"+trim(TARG) to TARG
+	        "ALL" or "AL" or "A": 
+		    move default to TARG
+	    end else begin
+	        type '?unrecognized modifier "',trim(S),'", type "LIST ?"',@cr
+	        repeat COMMAND.BLOCK
+	    end
+        end
+	if substr(CMD,1,1)="P" then begin 
+	    type
+		@27+"&p11C",@skip 5,
+		TITLE(NODE via ID=ROOT), @cr,
+		trim(UNAME), @tab 2, 
+		today as date "WWW ZD-MMM-YY", @cr
+	    if TARG # default then type
+		"showing status ", 
+		trim(TARG),
+		@cr
+	    type @skip 2
+        end
+        apply TRAVERSE (ROOT)
+	if substr(CMD,1,1)="P" then begin
+	    type @skip 2,
+		"legend:",@cr
+	    for each STATUS.DIR 
+		type "  ",STATUS," - ",trim(STATUS.DESC),@cr
+	    type
+		"  $ - incentive",@cr,
+		"  [mgr,ldr]",@cr,
+		"  <importance>",@cr,
+		@skip 10,@27+"&p13C"
+	    accept S % read status %
+	    accept S % read status %
+	end
+    end
+end
+
+procedure SUSPEND.COMMAND
+begin if ARG="?"
+    then type
+	"SUSPEND command syntax:",@cr,
+	"  SUSPEND [nodes] [date]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  date is the suspense date - default is today",@cr,
+	"Sets the actual suspense date for all selected nodes.",@cr
+    else begin
+	apply PARSE(ARG,ACT.SUS)
+	if ACT.SUS = default then move today to ACT.SUS
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key 
+		then alter NODE using (ACT.SUS of procedure for ACT.SUS)
+    end
+end
+
+procedure CANCEL.COMMAND
+begin if ARG="?"
+    then type
+	"CANCEL command syntax:",@cr,
+	"  CANCEL [nodes] [date]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  date is the cancelation date - default is today",@cr,
+	"Sets the actual cancelation date for all selected nodes.",@cr
+    else begin
+	apply PARSE(ARG,ACT.CAN)
+	if ACT.CAN = default then move today to ACT.CAN
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key 
+		then alter NODE using (ACT.CAN of procedure for ACT.CAN)
+    end
+end
+
+procedure UNCANCEL.COMMAND
+begin if ARG="?"
+    then type
+	"UNCANCEL command syntax:",@cr,
+	"  UNCANCEL [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"Clears the actual cancelation date for all selected nodes.",@cr
+    else
+      begin
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+         for each NODE.
+          select NODE via key 
+	    then alter NODE using (0 as ACT.CAN for ACT.CAN)
+      end
+end
+
+procedure UNASSIGN.COMMAND
+begin if ARG="?"
+    then type
+	"UNASSIGN command syntax:",@cr,
+	"  UNASSIGN [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"Clears the principle resource for all selected nodes.",@cr
+    else begin
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+         for each NODE.
+          select NODE via key 
+	    then alter NODE using (" " for LDR)
+        end
+end
+
+procedure SCHEDULE.COMMAND
+begin if ARG="?"
+    then type
+	"SCHEDULE command syntax:",@cr,
+	"  SCHEDULE [nodes] [date]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  date is the estimated begin date - default is today",@cr,
+	"Sets the estimated begin date for all selected nodes.",@cr
+    else begin
+	apply PARSE(ARG,EST.BEG)
+	if EST.BEG = default then move today to EST.BEG
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key 
+		then alter NODE using (EST.BEG of procedure for EST.BEG)
+    end
+end
+
+procedure TARGET.COMMAND
+begin if ARG="?"
+    then type
+	"TARGET command syntax:",@cr,
+	"  TARGET [nodes] [date]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  date is the estimated finish date - default is today",@cr,
+	"Sets the estimated finish date for all selected nodes.",@cr
+    else begin
+	apply PARSE(ARG,EST.FIN)
+	if EST.FIN = default then move today to EST.FIN
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key 
+		then alter NODE using (EST.FIN of procedure for EST.FIN)
+    end
+end
+
+procedure ASSIGN.COMMAND
+begin if ARG="?"
+    then type
+	"ASSIGN command syntax:",@cr,
+	"  ASSIGN [nodes] resource",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  resource is the project leader resource id",@cr,
+	"Sets the project leader field for all selected nodes.",@cr
+    else begin
+	apply PARSE(ARG,LDR)
+	while LDR = default do begin
+	    prompt "leader: "
+	    accept LDR
+	end
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key 
+		then alter NODE using (LDR of procedure for LDR)
+    end
+end
+
+procedure GRAFT.COMMAND
+begin if ARG="?"
+    then type
+	"GRAFT command syntax:",@cr,
+	"  GRAFT [nodes] UNDER node",@cr,
+	"  GRAFT [nodes] AFTER node",@cr,
+	"  GRAFT [nodes] BEFORE node",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  node is a node ID or NICKNAME",@cr
+    else begin
+	apply PARSE(ARG,S)		% get keyword %
+	apply PARSE(ARG,TCOM)	% get target node %
+        if substr(TCOM,1,1) # "#" then
+	  begin
+	  type "?# expected",@cr
+	  repeat COMMAND.BLOCK
+	  end
+	else
+          begin
+          let NICKNAME = substr(TCOM,2)
+          if NICKNAME is ID
+	    then select NODE via (ID=NICKNAME as ID)
+		then move NICKNAME as ID to ID of procedure
+		else begin
+		    type "?no such node: ",NICKNAME,@cr
+		    repeat COMMAND.BLOCK end
+	    else select NICKNAMES via key
+		then move ID to ID of procedure
+		else begin
+		    type "?no such nickname: ",NICKNAME,@cr
+		    repeat COMMAND.BLOCK end
+           conditional on S begin
+	    "U" or "UN" or "UND" or "UNDE" or "UNDER": 
+		move ID of procedure to UP
+	    "A" or "AF" or "AFT" or "AFTE" or "AFTER": 
+		move ID of procedure to PRED
+	    "B" or "BE" or "BEF" or "BEFO" or "BEFOR" or "BEFORE": 
+		move ID of procedure to SUCC
+           end else begin
+	     type "?keyword expected: ",S,@cr
+	     repeat COMMAND.BLOCK end
+           for each NODE. 
+	     apply GRAFT.NODE
+        end
+    end
+end
+
+procedure BEGIN.COMMAND
+begin if ARG="?"
+    then type
+	"BEGIN command syntax:",@cr,
+	"  BEGIN [nodes] [date]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  date is the actual begin date - default is today",@cr,
+	"Sets the actual begin field for all selected nodes.",@cr
+    else begin
+	apply PARSE(ARG,ACT.BEG)
+	if ACT.BEG = default then move today to ACT.BEG
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key 
+		then alter NODE using (ACT.BEG of procedure for ACT.BEG)
+    end
+end
+
+procedure FINISH.COMMAND
+begin if ARG="?"
+    then type
+	"FINISH command syntax:",@cr,
+	"  FINISH [nodes] [date]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  date is the actual finish date - ",@cr,
+	"  default is date of last task for the node",@cr,
+	"Sets the actual finish date for all selected nodes.",@cr
+    else begin
+	apply PARSE(ARG,ACT.FIN)
+	if ACT.FIN = default then let FLAG = 1 else let FLAG = 0 
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+            FINISH.IT:
+            begin
+              if FLAG = 1 then 
+                begin
+                let ACT.FIN = default
+                for each TASK via ID
+                  if DOE > ACT.FIN then move DOE to ACT.FIN
+                end
+             if ACT.FIN = default then
+                  begin
+                  type "No tasks found for project ",ID,@cr
+                  finish FINISH.IT
+                  end
+              else select NODE via key
+                  then alter NODE using (ACT.FIN of procedure for ACT.FIN)
+              end   % FINISH.IT %
+    end
+end
+
+procedure UNFINISH.COMMAND
+begin if ARG="?"
+    then type
+	"UNFINISH command syntax:",@cr,
+	"  UNFINISH [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"Clears the actual finish field for all selected nodes.",@cr
+    else begin
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+            select NODE via key
+              then alter NODE using (0 as ACT.FIN for ACT.FIN)
+        end
+end
+
+procedure UNBEGIN.COMMAND
+begin if ARG="?"
+    then type
+	"UNBEGIN command syntax:",@cr,
+	"  UNBEGIN [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"Clears the actual begin field for all selected nodes.",@cr
+    else begin
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+            select NODE via key
+              then alter NODE using (0 as ACT.BEG for ACT.BEG)
+        end
+end
+
+procedure RESUME.COMMAND
+begin if ARG="?"
+    then type
+	"RESUME command syntax:",@cr,
+	"  RESUME [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"Clears the actual suspense date for all selected nodes.",@cr
+    else begin
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key
+		then alter NODE using (0 as ACT.SUS for ACT.SUS)
+    end
+end
+
+procedure UNSCHEDULE.COMMAND
+begin if ARG="?"
+    then type
+	"UNSCHEDULE command syntax:",@cr,
+	"  UNSCHEDULE [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"Clears the estimated begin date for all selected nodes.",@cr
+    else begin
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key
+		then alter NODE using (0 as EST.BEG for EST.BEG)
+    end
+end
+
+procedure UNTARGET.COMMAND
+begin if ARG="?"
+    then type
+	"UNTARGET command syntax:",@cr,
+	"  UNTARGET [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"Clears the estimated finish date for all selected nodes.",@cr
+    else begin
+	for each NODE.
+	    select NODE via key
+		then alter NODE using (0 as EST.FIN for EST.FIN)
+    end
+end
+
+procedure MANAGE.COMMAND
+begin if ARG="?"
+    then type
+	"MANAGER command syntax:",@cr,
+	"  MANAGER [nodes] resource",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"  resource is the project leader resource id",@cr,
+	"Sets the project leader field for all selected nodes.",@cr
+    else begin
+	apply PARSE(ARG,MGR)
+	while MGR = default do begin
+	    prompt "manager: "
+	    accept MGR
+	end
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+          for each NODE.
+	    select NODE via key 
+		then alter NODE using (MGR of procedure for MGR)
+end
+end
+
+procedure UNMANAGE.COMMAND
+begin if ARG="?"
+    then type
+	"UNMANAGER command syntax:",@cr,
+	"  UNMANAGER [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMEs or *",@cr,
+	"Clears the principle resource for all selected nodes.",@cr
+    else begin
+	apply PROCEED.CHECK
+	if PROCEED.FLAG = 1 then
+         for each NODE.
+          select NODE via key 
+	    then alter NODE using (" " for MGR)
+        end
+end
+procedure SHOW.COMMAND 
+begin if ARG="?"
+    then type
+	"SHOW command syntax:",@cr,
+	"  SHOW [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMESs or *",@cr,
+	"Shows values of all undefaulted fields for selected node.",@cr
+    else
+      for each NODE.
+       select NODE via key then
+        begin
+        type ID as "5LN",":",@cr," ",TITLE,@cr,"   UP: ",UP as "5LN",
+            "  DOWN: ",DN as "5LN ","  PRED: ",
+            PRED as "5LN","  SUCC: ",SUCC as "5LN",@cr
+        if MGR # default then type "  Manager: ",MGR
+        if LDR # default then type "  Leader: ",LDR
+        type " Date entered: ", DOE,@cr
+        if CLASS # default then type "  Classification: ",CLASS
+        if VALUE # default then type "  Incentive value: ",VALUE
+        if KIND # default then type "  Kind: ",KIND,@cr
+        if EST.HRS # default then type "  Estimated hours: ",EST.HRS
+        if EST.BEG # default then type "  Estimated start date: ",EST.BEG,@cr
+        if EST.FIN # default then type "  Estimated finish date: ",EST.FIN,@cr
+        if ACT.HRS # default then type "  Actual hours: ",ACT.HRS,@cr
+        if ACT.BEG # default then type "  Actual start date: ",ACT.BEG
+        if ACT.SUS # default then type "  Actual suspended date: ",ACT.SUS,@cr
+        if ACT.CAN # default then type "  Actual cancellation date: ",ACT.CAN,
+           @cr
+        if ACT.FIN # default then type "  Actual finish date: ",ACT.FIN,@cr
+        if IMPORTANCE # default then type "  Assigned importance: ",
+           IMPORTANCE,@cr
+        type @cr
+        for each NODE.TEXT via ID
+          type FIELD.ID," ",LINE,@cr
+        type @cr
+        end         
+end
+
+procedure TITLE.COMMAND
+begin if ARG="?"
+    then type
+	"TITLE command syntax:",@cr,
+	"  TITLE [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMESs or *",@cr,
+	"You will be prompted for the correct project title",@cr,
+	"    (<cr> retains the old title)",@cr,
+	"Sets the title for selected node.",@cr
+    else 
+        for each NODE.
+          select NODE via key then
+	    begin
+	    type trim(TITLE),"=>"
+	    accept TITLE.IN
+	    if TITLE.IN # default
+		then alter NODE using (TITLE.IN for TITLE)
+            end
+end
+
+procedure CRITERIA.COMMAND
+begin if ARG="?"
+    then type
+	"CRITERIA command syntax:",@cr,
+	"  CRITERIA [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMESs or *",@cr,
+	"You will be prompted for the correct criteria line",@cr,
+	"    (<cr> retains the old line)",@cr,
+	"Adds/modifies the criteria for selected node.",@cr
+    else 
+        for each NODE.
+          begin
+          let FLAG=0
+	  select NODE via ID then
+	    type ID, "  ",TITLE,@cr,"Criteria:",@cr
+          for each NODE.TEXT via (ID,FIELD.ID="C")
+            type LINE,@cr
+          type @cr
+          for each NODE.TEXT via (ID,FIELD.ID="C")
+            begin
+            let FLAG=1
+            type trim(LINE),@cr," => "
+            accept LINE.IN
+            if length(LINE.IN) > 0 then alter NODE.TEXT
+              using (LINE.IN for LINE)
+	    let OLDCNT = CNT
+            end
+          if FLAG = 0 then
+            begin
+            type "Enter criteria, extra <cr> at end",@cr
+            accept LINE
+            let CNT = 1
+            let FIELD.ID = "C"
+            while LINE # default do
+              begin
+              insert into NODE.TEXT
+              let CNT=CNT+1
+              accept LINE
+              end            
+            end
+          else
+            begin
+            type "Enter additional lines, extra <cr> at end",@cr
+            accept LINE
+            let CNT = OLDCNT + 1
+            let FIELD.ID = "D"
+            while LINE # default do
+              begin
+              insert into NODE.TEXT
+              let CNT=CNT+1
+              accept LINE
+              end            
+            end
+    end
+end
+procedure DESC.COMMAND
+begin if ARG="?"
+    then type
+	"DESCRIPTION command syntax:",@cr,
+	"  DESCRIPTION [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMESs or *",@cr,
+	"You will be prompted for the correct description line",@cr,
+	"    (<cr> retains the old line)",@cr,
+	"Adds/modifies the description for selected node.",@cr
+    else 
+        for each NODE.
+          begin
+          let FLAG=0
+	  select NODE via ID then
+	    type ID, "  ",TITLE,@cr,"Description:",@cr
+          for each NODE.TEXT via (ID,FIELD.ID="D")
+            type LINE,@cr
+          type @cr
+          for each NODE.TEXT via (ID,FIELD.ID="D")
+            begin
+            let FLAG=1
+            type trim(LINE),@cr," => "
+            accept LINE.IN
+            if length(LINE.IN) > 0 then alter NODE.TEXT
+              using (LINE.IN for LINE)
+	    let OLDCNT = CNT
+            end
+          if FLAG = 0 then
+            begin
+            type "Enter description, extra <cr> at end",@cr
+            accept LINE
+            let CNT = 1
+            let FIELD.ID = "D"
+            while LINE # default do
+              begin
+              insert into NODE.TEXT
+              let CNT=CNT+1
+              accept LINE
+              end            
+            end
+          else
+            begin
+            type "Enter additional lines, extra <cr> at end",@cr
+            accept LINE
+            let CNT = OLDCNT + 1
+            let FIELD.ID = "D"
+            while LINE # default do
+              begin
+              insert into NODE.TEXT
+              let CNT=CNT+1
+              accept LINE
+              end            
+            end
+    end              
+end
+
+procedure REMARK.COMMAND
+begin if ARG="?"
+    then type
+	"REMARK command syntax:",@cr,
+	"  REMARK [nodes]",@cr,
+	"where",@cr,
+	"  nodes is a list of node IDs or NICKNAMESs or *",@cr,
+	"You will be prompted for the correct remark line",@cr,
+	"    (<cr> retains the old line)",@cr,
+	"Adds/modifies the remarks for selected node.",@cr
+    else 
+        for each NODE.
+          begin
+          let FLAG=0
+	  select NODE via ID then
+	    type ID, "  ",TITLE,@cr,"Remarks:",@cr
+          for each NODE.TEXT via (ID,FIELD.ID="R")
+            type LINE,@cr
+          type @cr
+          for each NODE.TEXT via (ID,FIELD.ID="R")
+            begin
+            let FLAG=1
+            type trim(LINE),@cr," => "
+            accept LINE.IN
+            if length(LINE.IN) > 0 then alter NODE.TEXT
+              using (LINE.IN for LINE)
+	    let OLDCNT = CNT
+            end
+          if FLAG = 0 then
+            begin
+            type "Enter remarks, extra <cr> at end",@cr
+            accept LINE
+            let CNT = 1
+            let FIELD.ID = "R"
+            while LINE # default do
+              begin
+              insert into NODE.TEXT
+              let CNT=CNT+1
+              accept LINE
+              end            
+            end
+          else
+            begin
+            type "Enter additional lines, extra <cr> at end",@cr
+            accept LINE
+            let CNT = OLDCNT + 1
+            let FIELD.ID = "D"
+            while LINE # default do
+              begin
+              insert into NODE.TEXT
+              let CNT=CNT+1
+              accept LINE
+              end            
+            end
+    end
+end
+
+procedure HELP.COMMAND
+begin if ARG=" "
+    then type
+	"valid commands are:",@cr,
+	"  ALTER        sets/changes arbitrary field values",@cr,
+	"  ASSIGN       sets/changes principle resource",@cr,
+	"  BEGIN        sets/changes actual begin date",@cr,
+	"  BUG          reports an MTS/MAGNUM bug to the maintainer",@cr,
+	"  CANCEL       sets/changes actual cancel date",@cr,
+	"  CRITERIA     adds/changes criteria",@cr,
+	"  DESCRIPTION  adds/changes description",@cr,
+	"  FIND         selects nodes for future operations",@cr,
+	"  FINISH       sets/changes actual finish date",@cr,
+	"  GRAFT        moves node to another location",@cr,
+	"  HELP         types this list",@cr,
+	"  HOURS        sets/changes estimated hours",@cr,
+	"  IMPORTANCE   sets/changes importance",@cr,
+	"  LIST         displays nodes matching criteria",@cr,
+        "  MANAGER      sets/changes manager",@cr,
+	"  PRINT        prints nodes matching criteria",@cr,
+	"  REMARK       adds/changes remark to description",@cr,
+	"  RESUME       clears actual suspense date",@cr,
+	"  ROOT         changes root node for other commands",@cr,
+	"  SCHEDULE     sets/changes estimated begin date",@cr,
+	"  SHOW         lists nodes selected by 'FIND'",@cr,
+	"  SUSPEND      sets/changes actual suspense date",@cr,
+	"  TARGET       sets/changes estimated finish date",@cr,
+	"  TITLE        changes title",@cr,
+	"  UNASSIGN     clears principle resource",@cr,
+	"  UNBEGIN      clears actual begin date",@cr,
+	"  UNCANCEL     clears actual cancel date",@cr,
+	"  UNFINISH     clears actual finish date",@cr,
+        "  UNMANAGER    clears manager",@cr,
+	"  UNSCHEDULE   clears estimated begin date",@cr,
+	"  UNSUSPEND    clears suspense date - same as RESUME",@cr,
+	"  UNTARGET     clears estimated finish date",@cr,
+	"  VALUE        sets/changes incentive value factor",@cr,
+	"  QUIT         leaves UPDATER",@cr,
+	'type "command ?" for more details on a particular command',@cr
+    else type
+	"HELP command syntax:",@cr,
+	"  HELP",@cr,
+	'type "command ?" for details on a particular command',@cr
+end
+
+move USER.NAME to UNAME
+move 1 to ROOT
+for each RES
+    if RES.UNAME = UNAME then begin
+	move RES.ID to RES.ID of procedure
+	move RES.ROOT to ROOT,RES.ROOT of procedure
+    end
+move default to DATE1
+move default to DATE2
+select NODE via (ID=ROOT)
+    then apply FIND.ALL
+    else type "%default ROOT for ",trim(UNAME),
+	" does not exist: ",ROOT as "9L",@cr
+type "[",count(NODE.) as "9L", " nodes]",@cr
+move count(NODE.) to NODE.CNT
+COMMAND.BLOCK: begin
+    prompt "UPD>"
+    accept CMD
+    move upper.case(CMD) to ARG
+    move @32 to PARSE.BREAK
+    apply PARSE (ARG,CMD)
+    if substr(ARG,1,1)="*" then begin
+	apply PARSE (ARG,XID)
+	apply FIND.ALL end
+    if substr(ARG,1,1)="#" then
+	delete from NODE. all
+    while substr(ARG,1,1)="#" do begin
+	apply PARSE (ARG,XID)
+	move substr(XID,2) to XID
+	if XID is ID then move XID as ID to ID
+	else select NICKNAMES via (UNAME,NICKNAME=XID) then move ID to ID of procedure
+	else begin
+	    type "?ID or NICKNAME expected following #: #",XID,@cr
+	    repeat COMMAND.BLOCK
+	end
+	select NODE via key
+	    then insert into NODE.
+	    else type "?node ",ID as "8L"," not found",@cr
+        move count(NODE.) to NODE.CNT
+    end
+    conditional on CMD begin
+	" ": nothing
+	"ALTER" or "ALT" or "AL": apply ALTER.COMMAND
+	"ASSIGN" or "ASSIG" or "ASSI" or "ASS" or "AS": apply ASSIGN.COMMAND
+	"BEGIN" or "BEGI" or "BEG" or "BE": apply BEGIN.COMMAND
+	"BUG" or "BU": run BUG
+	"CANCEL" or "CANC" or "CAN" or "CA": apply CANCEL.COMMAND
+	"CRITERIA" or "CRIT" or "CRI" or "CI": apply CRITERIA.COMMAND
+	"DESCRIPTION" or "DESC" or "DE" or "D":  apply DESC.COMMAND 
+	"FIND" or "F": apply FIND.COMMAND
+	"FINISH" or "FINI": apply FINISH.COMMAND
+	"GRAFT" or "GRAF" or "GRA" or "GR": apply GRAFT.COMMAND
+	"HELP" or "HEL" or "HE": apply HELP.COMMAND
+	"HOURS" or "HOUR" or "HOU" or "HO": apply HOURS.COMMAND
+	"IMPORTANCE" or "IMPORT" or "IMPO" or "IMP" or "IM": apply IMPORTANCE.COMMAND
+	"LIST" or "LIS" or "LI" or
+	"PRINT" or "PRIN" or "PRI" or "PR" or "P": apply LIST.COMMAND
+	"REMARK" or "REMA" or "REM": apply REMARK.COMMAND
+	"MANAGER" or "MANAGE" or "MAN" OR "MA" OR "M": apply MANAGE.COMMAND
+	"QUIT" or "QUI" or "QU" or "Q": finish COMMAND.BLOCK
+	"UNSUSPEND" or "UNSUSP" or "UNSUS" or "UNSU" or
+	"RESUME" or "RESU" or "RES": apply RESUME.COMMAND
+	"ROOT" or "ROO" or "RO": apply ROOT.COMMAND
+	"SCHEDULE" or "SCHED" or "SCH" or "SC": apply SCHEDULE.COMMAND
+        "SHOW" or "SHO" or "SH": apply SHOW.COMMAND
+	"TARGET" or "TARG" or "TAR" or "TA" or "T": apply TARGET.COMMAND
+	"TITLE" or "TITL" or "TIT" or "TI": apply TITLE.COMMAND
+	"SUSPEND" or "SUSP" or "SUS" or "SU": apply SUSPEND.COMMAND
+	"UNASSIGN" or "UNASSIG" or "UNASSI" or "UNASS" or "UNAS": apply UNASSIGN.COMMAND
+	"UNBEGIN" or "UNBEGI" or "UNBEG" or "UNBE": apply UNBEGIN.COMMAND
+	"UNCANCEL" or "UNCANCE" or "UNCANC" or "UNCAN" or "UNCA": apply UNCANCEL.COMMAND
+	"UNFINISH" or "UNFINIS" or "UNFINI" or "UNFIN" or "UNFI": apply UNFINISH.COMMAND
+	"UNMANAGER" or "UNMANAGE" or "UNMANA" or "UNMAN" or "UNMA": apply UNMANAGE.COMMAND
+	"UNSCHEDULE" or "UNSCHED" or "UNSCHE" or "UNSCH" or "UNSC": apply UNSCHEDULE.COMMAND
+	"UNTARGET" or "UNTARGE" or "UNTARG" or "UNTAR" or "UNTA" or "UUT": apply UNTARGET.COMMAND
+	"VALUE" or "VALU" or "VAL" or "VA": apply VALUE.COMMAND
+    end	
+    else type '?unrecognized command, type "HELP" if you need it',@cr
+    repeat COMMAND.BLOCK
+end % COMMAND.BLOCK %
+
+end % procedure UPDATER %
+    2Mw]
