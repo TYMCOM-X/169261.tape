@@ -1,0 +1,80 @@
+The TIME.SHEETS procedure has been fixed up a little.  You may now
+specify a list of resources to generate/load time sheets for.  There
+is also a new command OUTSTANDING to list all time sheets that have
+ben GEN'd but not LOAD'd.
+/WRS 24-SEP-81
+
+The procedure BUG may now be used to report bugs.  It is available
+as the BUG command in mostly everything that takes commands.
+/WRS 24-SEP-81
+
+Signifigant improvement to UPDATER - more on the way.
+/WRS 13-SEP-81
+
+Wrote quick hack MAILING.LIST program to generate .CMD files for RPG:
+    USRS.CMD - all MTS resources
+    MGRS.CMD - all MTS managers 
+/WRS 11-SEP-81
+
+Changed MTX to accept the RES.ID argument.
+/WRS 10-SEP-81
+
+Rewrote the report RESOURCE.STATUS.  Old report is now called 
+PC70.Resource.Status.  The new report shows less detail: 1 line
+per project.  Projects are grouped by status.  The command now
+takes an optional argument which is the resource to report for.
+This argument defaults to the resource running the report.  All
+resources reporting to the selected resource are shown along with
+the one selected.
+/WRS 10-SEP-81
+
+Fixed bug in TIME.SHEETS causing today to be used as the DOE for TASKS
+following new projects.
+/WRS 9-SEP-81
+
+Fixed bug in TIME.SHEETS causing HISTORY multiple records to show up as
+duplicates of the first one.
+/WRS 31-AUG-81
+
+Added the field ACT.SUS to relation NODE to hold the actual suspense
+date for projects which are suspended.  The proper way to derive
+project status is now (order is important):
+    if ACT.END # default 	then % completed %
+    else if ACT.SUS # default	then % suspended %
+    else if KIND = 2 	 	then % ongoing %
+    else if ACT.BEG # default 	then % inprogress %
+    else if EST.BEG # default	then % pending %
+    else 			     % unscheduled %
+/WRS 31-AUG-81
+
+Corrected bug in TIME.SHEETS preventing certain projects from
+appearing.  
+/WRS 30-AUG-81
+
+Enhancements to NODE.TREE report - it is now readable.
+/WRS 30-AUG-81
+
+Added code to TIME.SHEETS to insert nodes if the ID field is null.
+Nodes will be inserted under node whose ID is in RES.NEW(RES).  If
+RES.NEW(RES) is null, that resource will not be allowed to insert
+new nodes.
+/WRS 27-AUG-81
+
+Seperated internal procedures to manipulate NODE structure into texts:
+	NEW.NODE
+	INSERT.NODE
+	DELETE.NODE
+and changed the affected procedures to use them.  This should correct
+problems causing structure inconsistencies.
+/WRS 23-AUG-81
+
+New command in MTX:
+	NEWS
+will display the contents of the file (TYMXMTS)NEWS.TXT (this one).
+/WRS 23-AUG-81
+	
+New procedure:
+	RUN CHECKER
+will report any structure inconsistencies in the NODE relation.  Do not
+try to fix the problems unless you are a bonafide MTS wizard.
+/WRS 18-JUL-81
