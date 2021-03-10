@@ -1,0 +1,48 @@
+procedure LOCK
+begin
+
+fields
+    P1 as "NNN",
+    P2 as "NNN",
+    LU as "25C",
+    LL as "80C"
+
+source LF from "(TYMXMTS)GOG5UH.ME0"
+    fixed form input LINE, @cr
+
+report to "(TYMXMTS)GOG5UH.ME0-ANY"
+    page.size 1
+    page.top @cr
+
+move default to LU
+for each LF begin
+    move position(LINE,"by user ") to P1
+    if P1 > 0 then begin
+	add 8 to P1
+	move position(LINE," ",P1) to P2
+	move substr(LINE,P1,P2-P1) to LU
+	move substr(LINE,7) to LL
+    end
+end
+
+if LU # default and USER.NAME then begin
+    type "?system locked ",trim(LL),@cr
+    type "enter lock user name to override: "
+    accept LINE
+    if LINE # LU then abort "?name mismatch",@cr
+end
+write report begin print
+    "note: ******** SYSTEM LOCKED ********", @cr,
+    "note: by user ", trim(USER.NAME), 
+	" job "
+	if JOB.NUM < 10 then print JOB.NUM as "N"
+	else if JOB.NUM < 100 then print JOB.NUM as "NN"
+	else print JOB.NUM
+	print " at ", (TIME/3600) as "ZN", ":",
+	(TIME/60 mod 60) as "NN", 
+	" on ", today as date "WWW MMM DD", @cr,
+    "note: please do not access relations!", @cr,
+    "do terminal", @cr end
+type "System locked.",@cr,"Please check for logged in users.",@cr
+
+end
