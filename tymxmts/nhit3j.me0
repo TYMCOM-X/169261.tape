@@ -1,0 +1,83 @@
+procedure CHECKER
+begin
+
+    controls for relations concurrent update
+
+    fields
+	ID. same as ID,
+	UP. same as UP,
+	DN. same as DN,
+	PRED. same as PRED,
+	SUCC. same as SUCC,
+	TITLE. same as TITLE,
+	ID.LAST same as ID,
+	ERR.CNT as "ZZZZZN"
+
+    procedure IDH
+    begin
+	if ID.LAST # ID. then begin 
+	    if ERR.CNT = 0 then type @cr, "    id  title                               up      dn    pred    succ",@cr,@cr
+	    type ID., @tab 2, TITLE., @tab 2, UP., @tab 2, DN., @tab 2, PRED., @tab 2, SUCC., @cr
+	end
+	move ID. to ID.LAST
+	add 1 to ERR.CNT
+    end
+
+    move default to ID.LAST,ERR.CNT
+    for each NODE begin
+	move ID to ID.
+	move UP to UP.
+	move DN to DN.
+	move SUCC to SUCC.
+	move PRED to PRED.
+	move TITLE to TITLE.
+	if ID = UP then begin apply IDH
+	    type "?UP pointer points to self",@cr end
+	if ID = DN then begin apply IDH
+	    type "?DN pointer points to self",@cr end
+	if ID = PRED then begin apply IDH
+	    type "?PRED pointer points to self",@cr end
+	if ID = SUCC then begin apply IDH
+	    type "?SUCC pointer points to self",@cr end
+	if UP # default then select NODE via ID=UP.
+	    then if ((PRED. = default) and (DN # ID.)) 
+		or ((PRED. # default) and (DN = default))
+		then begin apply IDH 
+		    type "?UP node does not point back",@cr end
+		else nothing
+	    else begin apply IDH
+		type "?UP node does not exist",@cr end
+	if DN # default then select NODE via ID=DN.
+	    then begin
+		if UP # ID. then begin apply IDH
+		    type "?DN node does not point back",@cr end
+		if PRED # default then begin apply IDH
+		    type "?DN node has PRED",@cr end
+	    end
+	    else begin apply IDH
+	        type "?DN node does not exist",@cr end
+	if PRED # default then select NODE via ID=PRED.
+	    then begin
+		if SUCC # ID. then begin apply IDH
+		    type "?PRED node does not point back",@cr end
+		if UP # UP. then begin apply IDH
+		    type "?PRED node UP pointer differs",@cr end
+	    end	
+	    else begin apply IDH
+	        type "?PRED node does not exist",@cr end
+	if SUCC # default then select NODE via ID=SUCC.
+	    then begin
+		if PRED # ID. then begin apply IDH
+		    type "?SUCC node does not point back",@cr end
+		if UP # UP. then begin apply IDH
+		    type "?SUCC node UP pointer differs",@cr end
+	    end	
+	    else begin apply IDH
+	        type "?SUCC node does not exist",@cr end
+    end
+
+    type @cr,
+	"structure errors detected: ",ERR.CNT,@cr,
+	"nodes in data base:        ",count(NODE) as ERR.CNT,@cr
+
+end
