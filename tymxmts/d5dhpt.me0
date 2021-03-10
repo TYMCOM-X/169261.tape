@@ -1,0 +1,287 @@
+schema MTS
+%
+	Management Tracking System schema
+%
+begin
+
+    fields
+	RES.ID as "4C",			% resource code %
+	RES.NAME as "20C",		% full name %
+	RES.MGR as "4C",		% manager's resource code %
+	RES.UNAME as "12C",		% user name %
+        RES.TERM.DATE as date "ZM/ZD/YB",  % termination date %
+	UNAME as "12C",			% user name logged in %
+	ID as "5ZB",			% milestone node ID %
+	UP same as ID,  		% structure pointers %
+	DN same as ID,			% structure pointers %
+	PRED same as ID,		% structure pointers %
+	SUCC same as ID,		% structure pointers %
+	TITLE as "30C",			% short description %
+	MGR same as RES.ID,		% project manager %
+	LDR same as RES.ID,		% project leader %
+	DOE as date "ZMDDYB",		% date of entry %
+	CLASS as "6C",			% project classification(s) %
+	VALUE as "Z.NB",		% incentive value factor %
+        LEVEL as "N" default 7,		% detail level of node %
+        LEVEL.DESC as "3C",		% level descriptor %
+        KIND as "Z",                    % node schedule type %
+	IMPORTANCE as "5ZB" default 999999,% PRB assigned importance %
+	COST.CODE as "4ZB",		% cost code %
+	CHARGE.PCT as "ZZB",		% charge back percent %
+	CHARGE.MAX as "7ZB",		% charge back maximum %
+	DEPEND.ID same as ID,		% ID of a dependencies project %
+	PREREQ.ID same as ID,		% ID of a prerequired project %
+	FIELD.ID as "1C",		% field name for text %
+	CNT as "5N",			% text line number %
+	LINE as "72C",			% a line of text %
+	TASK.ID as "4N",		% task code %
+	HOURS as "3ZN.B",		% spent man hours %
+	REMAIN as "3ZN.B",		% revised man hours %
+	EST.HRS as "3ZN.B",		% hours %
+	EST.BEG as date "ZMDDYB",	% target start date %
+	EST.FIN as date "ZMDDYB", 	% target finsh date %
+	ACT.HRS as "3ZN.B",		% hours %
+	ACT.BEG as date "ZMDDYB",	% start date %
+	ACT.SUS as date "ZMDDYB",	% suspense date %
+	ACT.CAN as date "ZMDDYB", 	% cancellation date %
+	ACT.FIN as date "ZMDDYB", 	% finish date %
+	STATUS as "C",			% U O P I S C %
+	STATUS.DESC as "24C",		% what does this mean? %
+	REMARK as "24C",		% general status/remarks %
+	TASK.DESC as "24C",		% task description %
+	CLASS.DESC as "24C",		% project class description %
+	GVAR as "5N",			% global variable number %
+	GVAL as "5N",			% value of global variable %
+	WEEK.END as date "MMMDD",	% end of week for time sheets %
+	GEN.DATE as date "ZMDDYB",	% date generated %
+	LOAD.DATE as date "ZMDDYB",	% date loaded %
+			% variables for TRAVERSE procedure %
+	TRV.ID same as ID,		% ID of node being visited %
+	TRV.PREV same as ID,		% ID of node visited last %
+	TRV.NEXT same as ID,		% ID of node to visit next %
+	TRV.ORDER as "N",		% 1=preord 2=term 3=postord %
+	TRV.DEPTH as "5N",		% depth in tree %
+	TRV.SEQ as "6N",		% seq # in traverse path %
+			% variables for TASK.SUM routine %
+	TS.RES same as RES.ID,		% include only LDR tasks %
+	BUDGET same as HOURS,		% budget at begin of project %
+	QUOTA same as HOURS,		% quota at begin of period %
+	TODATE same as HOURS,		% hours through end of period %
+%	HOURS same as HOURS%		% hours spent this period %
+%	REMAIN same as HOURS%		% hours left at end of period %
+	TS.BUDGET same as BUDGET,
+	TS.QUOTA same as QUOTA,
+	TS.TODATE same as TODATE,
+	TS.HOURS same as HOURS,
+	TS.REMAIN same as REMAIN,
+			% misc global variables %
+        CMD as "16C",
+        ARG as "80C",
+	NICKNAME as "10C",		% nickname for node %
+        T as "9N",                      % temp for PARSE %
+	ROOT same as ID,		% ROOT of subtree %
+	RES.ROOT same as ID,		% ROOT of subtree accessable to %
+	RES.NEW same as ID,		% default parent for new nodes %
+	LEVEL1 same as LEVEL,		% level range %
+	LEVEL2 same as LEVEL,
+	SW same as ARG,			% switches %
+  	IFILE as "25C",			% input/output files %
+	OFILE same as IFILE,
+	DATE1 as date "ZM/ZD/YB",	% date range %
+	DATE2 as date "ZM/ZD/YB" default date "19991231",
+	QTR as "4C" verify (QTR = "    ") or (
+	    (substr(QTR,1,1) is "N") and 
+	    (substr(QTR,2,1) = "Q" or "q") and
+	    (substr(QTR,3,2) is "NN") ),% quarter %
+	INSERT.ID same as ID,		% locals for INSERT.NODE %
+	INSERT.ID1 same as ID,
+	INSERT.UP same as UP,
+	INSERT.DN same as DN,
+	INSERT.PRED same as PRED,
+	INSERT.SUCC same as SUCC,
+	DELETE.ID same as ID,		% locals for DELETE.NODE %
+	DELETE.UP same as UP,
+	DELETE.DN same as DN,
+	DELETE.PRED same as PRED,
+	DELETE.SUCC same as SUCC
+
+    relation RES is
+%
+	Contains all commonly used info about a resource keyed on 
+	the 4 character PC/70 resource ID which is constructed as
+	follows (by convention): FFFL where 
+		FFF 	is the first three letters of the first name
+		L 	is the first character of the last name
+%
+	key	RES.ID			% 4 char resource ID %
+	data	RES.NAME,		% resource name %
+		RES.MGR,		% manager's name %
+		RES.UNAME,		% user name %
+                RES.TERM.DATE,		% termination date %
+		RES.ROOT,		% subtree accessable to RES %
+		RES.NEW			% default parent for new nodes %
+
+    relation NICKNAMES is
+%
+	Contains all nicknames for a given user
+%
+	key	UNAME,
+		NICKNAME
+	data	ID			% node id for node %
+
+    relation NODE is
+%
+	Contains one instance per milestone tree node.
+%
+	key	ID			% project id %
+	data	UP,			% ID of parent node %
+		DN,			% ID of first child %
+		PRED,			% ID of pred sibling node %
+		SUCC,			% ID of succ sibling node %
+		LEVEL,			% detail level %
+		TITLE,			% short description %
+		MGR,			% manager's ID %
+		LDR,			% project leader's ID %
+		DOE,			% date of entry %
+		CLASS,			% classification %
+		VALUE,			% incentive value factor %
+		KIND,			% KIND of scheduling %
+		EST.HRS,EST.BEG,EST.FIN,% estimates %
+		ACT.HRS,ACT.BEG,ACT.SUS,ACT.CAN,ACT.FIN,% realities %
+		IMPORTANCE		% assigned importance %
+
+    relation CHARGE is
+%
+	Contains a list of cost.codes and limits for charging
+	projects back to the requestor.  Note if .PCT=0 then .MAX
+	is the amount to charge back.  If .MAX=0 then there is no 
+	limit.  If both .PCT and .MAX are 0 then nothing is charged.
+%
+	key	ID,
+		COST.CODE		% cost center for charge back %
+	data	CHARGE.PCT,		% amount to charge back %
+		CHARGE.MAX,		% max amt to charge back %
+		REMARK			% an explanation %
+	
+    relation DEPEND is
+%
+	Contains a list of dependent projects.  All of the projects
+	DEPEND.ID such that DEPEND via ID,DEPEND.ID is
+	present, must be completed before ID may be started.
+%
+	key	ID,
+		DEPEND.ID		% dependent project ID %
+	data	REMARK			% why? %
+
+    relation PREREQ is
+%
+	Contains a list of prerequired projects.  All of the projects
+	PREREQ.ID such that PREREQ via ID,PREREQ.ID is
+	present, must be completed before ID may be started.
+%
+	key	ID,
+		PREREQ.ID		% prerequired project ID %
+	data	REMARK			% why? %
+
+    relation NODE.TEXT is
+%
+	Contains all descriptive text describing project ID.
+	FIELD.ID determines the relative position of the text on
+	the report.  CNT simply orders and makes unique the lines
+	of text.  The report generator will (by convention) read
+	text from a sequential file if the first character of LINE
+	if "@".  The name of the file to be read must immediately
+	follow the "@" in LINE.
+%
+	key	ID,
+		FIELD.ID,		% type of text %
+		CNT			% line count %
+	data	LINE			% line of text or @fielname %
+
+    relation NODE.HIST is
+%
+	Contains all history text describing project ID.
+	CNT simply orders and makes unique the lines of text.  
+	The report generator will (by convention) read
+	text from a sequential file if the first character of LINE
+	if "@".  The name of the file to be read must immediately
+	follow the "@" in LINE.
+%
+	key	ID,
+		DOE,			% date of text %
+		RES.ID,			% who said it %
+		CNT			% line count %
+	data	LINE			% line of text or @fielname %
+
+    relation TASK is
+%
+	Contains TASK,RESOURCE oriented data.  An initial estimate is
+	provided with a nil DOE.  Subsequent estimates are entered as
+	hours are accumulated.
+%
+	key	ID,
+ 		TASK.ID,		% task ID %
+		RES.ID, 		% resource ID %
+		DOE			% date of entry or change %
+	data	HOURS,			% hours spent %
+		REMAIN,			% hours to complete %
+		REMARK			% remarks %
+    
+    relation TASK.DIR is
+%
+	Contains descriptions of all the PC/70 defined task ids.
+%
+	key	TASK.ID
+	data	TASK.DESC		% description of task %
+
+    relation STATUS.DIR is
+%
+	Contains descriptions of all STATUS codes for projects.
+%
+	key	STATUS
+	data	STATUS.DESC		% description of status %
+
+    relation CLASS.DIR is
+%
+	Contains descriptions of all the 1 character project class
+	codes, for example R=reliability, S=security, etc.
+%
+	key	CLASS
+	data	CLASS.DESC		% description of class %
+
+    relation GLOBAL.VAR is
+%
+	Contains 1 instance for each global variable.
+	GVAR = 1	; last assigned milestone number
+%
+  	key	GVAR
+	data	GVAL
+
+    relation NEW.PROJECT is
+%
+	Contains information about projects added when loading time
+	sheets (to avoid duplication)
+%
+	key	DOE,
+		TITLE
+
+	data	ID
+
+%
+	Contains the status of all recent or outstanding time.sheets.
+%
+    relation TS.STATUS is
+	key	RES.ID,
+		WEEK.END
+	data	GEN.DATE,
+		LOAD.DATE
+	
+%
+	Descriptions for level codes LEVEL.
+%
+    relation LEVEL.DIR is
+	key	LEVEL
+	data	LEVEL.DESC
+
+end
+  
