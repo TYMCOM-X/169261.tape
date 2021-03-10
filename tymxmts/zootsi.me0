@@ -1,0 +1,86 @@
+procedure TASK.SUMMARY (OFILE,ROOT,QTR,DATE1,DATE2,SW)
+begin
+
+fields
+    TASK.LVL as "N",
+    TOT.HRS same as HOURS
+
+report to OFILE
+    page.size 1
+    page.top @cr
+    report.heading begin
+        print @cr
+	if QTR # default then print QTR
+	else print DATE1," to ",DATE2
+	print " task summary ", @cr,@cr,
+	    "task", @tab (size(TASK.DESC)-4),
+	    "   hours       %", @cr,@cr
+    end
+
+relation TSK.SUM is
+    key TASK.LVL,TASK.ID
+    data HOURS
+
+procedure VISIT 
+begin 
+    for each TASK via ID 
+	if (DOE # default and >= DATE1 and <= DATE2) and (HOURS > 0) then begin
+	    add HOURS to TOT.HRS
+	    do begin
+		if TASK.ID mod 10 # 0 then move 4 to TASK.LVL
+		else if TASK.ID mod 100 # 0 then move 3 to TASK.LVL
+		else if TASK.ID mod 1000 # 0 then move 2 to TASK.LVL
+		else if TASK.ID # 0 then move 1 to TASK.LVL
+		else move 0 to TASK.LVL
+		select TSK.SUM via key
+		    then begin
+		    	add HOURS of TASK to HOURS
+		    	alter TSK.SUM end
+		    else insert into TSK.SUM
+		conditional on TASK.LVL begin
+		    0: nothing
+		    1: move 0000 to TASK.ID
+		    2: subtract TASK.ID mod 1000 from TASK.ID
+		    3: subtract TASK.ID mod 100 from TASK.ID
+		    4: subtract TASK.ID mod 10 from TASK.ID
+		end
+	    end while TASK.LVL > 0
+	end
+end
+
+include text "TRAVERSE"
+
+%
+	M A I N
+%
+
+%	build data in temp relations
+%
+move default to TOT.HRS
+apply TRAVERSE (ROOT)
+
+%	write report
+%
+write report begin
+    select smallest TSK.SUM via TASK.LVL=0 then begin
+	print TASK.DESC(TASK.DIR via key), @tab 2, HOURS, @tab 2, (100*HOURS/TOT.HRS) as HOURS, @cr
+	if HOURS/TOT.HRS > 0.1 then for each TSK.SUM via TASK.LVL=1 begin
+	    print @tab 4, TASK.DESC(TASK.DIR via key), @tab 2, HOURS, @tab 2, (100*HOURS/TOT.HRS) as HOURS, @cr
+	    if HOURS/TOT.HRS > 0.1 then FE2: for each TSK.SUM via (TASK.LVL=2,TASK.ID>TASK.ID) begin
+	 	if TASK.ID mod 1000 = 0 then finish FE2
+	    	print @tab 8, TASK.DESC(TASK.DIR via key), @tab 2, HOURS, @tab 2, (100*HOURS/TOT.HRS) as HOURS, @cr
+	    	if HOURS/TOT.HRS > 0.1 then FE3: for each TSK.SUM via (TASK.LVL=3,TASK.ID>TASK.ID) begin
+		    if TASK.ID mod 100 = 0 then finish FE3
+	    	    print @tab 12, TASK.DESC(TASK.DIR via key), @tab 2, HOURS, @tab 2, (100*HOURS/TOT.HRS) as HOURS, @cr
+		    if HOURS/TOT.HRS > 0.1 then FE4: for each TSK.SUM via (TASK.LVL=4,TASK.ID>TASK.ID) begin
+			if TASK.ID mod 10 = 0 then finish FE4
+	    	    	print @tab 16, TASK.DESC(TASK.DIR via key), @tab 2, HOURS, @tab 2, (100*HOURS/TOT.HRS) as HOURS, @cr
+		    end
+		end
+	    end
+	end
+    end
+end
+	
+end
+
