@@ -1,0 +1,267 @@
+procedure INCENTIVE.REPORT (OFILE,IFILE,QTR,DATE1,DATE2)
+%
+    EDIT HISTORY:
+
+    KIND updated 1/25/83  L.Lindley
+%
+begin
+
+fields
+    PERF as "ZZ.NZZ-",
+    QQ as "6Z.ZZZ-",
+    VAL.SUM as "ZZB.NN",
+    BUD.SUM as "5ZB.N",
+    ACT.SUM as "5ZB.N",
+    REM.SUM as "5ZB.N",
+    PER.SUM as "5ZB.N",
+    NMH as "5ZB.N",
+    MH.SUM as "5ZB.N",
+    NMH.SUM as "5ZB.N",
+    HEAD.ID as "N",
+    B as "ZZ.NZZ-",		% budget performance %
+    WB as "ZZ.NZ",		% budget weighting factor %
+    R as "ZZ.NZZ-",		% reliability performance %
+    WR as "ZZ.NZ",		% reliability weighting factor %
+    M as "ZZ.NZZ-",		% milestone performance %
+    WM as "ZZ.NZ",		% milestone weighting factor %
+    P as "ZZ.NZZ-",		% productivity performance %
+    WP as "ZZ.NZ",		% productivity weighting factor %
+    T as "ZZ.NZZ-",		% total performance %
+    CLA as "25C",		% class of member %
+    BAS as "4ZB",		% base %
+    LEV as "ZZ.NZ",		% leverage %
+    DOL as "5$B.BB",		% dollar amount %
+    RPT.TITLE as "30C"		
+
+relation RES. is
+%
+	holds 1 instance for each resource being computed
+	instances are created from the source INC.DATA which
+	has the form
+		*,Tymcom-X Operating System Unit
+		res.id,class,base,lever,bud*,rel*,mil*,pro*
+	where 
+		xxx* is the pair productivity,weight
+%
+    key	RES.ID
+    data CLA,BAS,LEV,
+	B,WB, R,WR, M,WM, P,WP,
+	NMH
+
+source INC.DATA 
+    from IFILE
+    free form
+    input RES.ID,
+	conditional on RES.ID begin
+	    "*": RPT.TITLE
+	end else begin
+	    CLA,BAS,LEV, B,WB, R,WR, M,WM, P,WP
+	end, 
+	@cr
+  
+relation TMP is
+%
+	this holds all project oriented data for the report
+%
+    key 
+	RES.ID, 	% who %	
+	ID		% what %
+    data 
+	TITLE,		% for information %
+	LDR,		% for information %
+	VALUE,		% value factor %
+	KIND,		% 1 if by land - 2 if by sea %
+	QUOTA, 		% estimate of time for this quarter %
+	HOURS, 		% hours completed this quarter %
+	REMAIN		% hours unfinished %
+  
+report to OFILE
+    page.top @ff
+    top.margin 3
+    bottom.margin 3
+    heading.size 8
+    page.heading begin 
+	if QTR # default then print QTR
+	else print DATE1," to ",DATE2
+	print @tab to 27,"Milestone Tracking System",
+	@tab to 71,"page",PAGE.NUM as "ZZN",@cr,
+	"(unaudited)",
+	@tab to (69-length(USER.NAME)),
+	today as date "ZM/DD/YB ",trim(USER.NAME), @cr,
+	@tab to 24,"I N C E N T I V E   R E P O R T", @cr,@cr,
+	@tab to 24,"  ** STRICTLY CONFIDENTIAL **", @cr,@cr,@cr,@cr
+    end
+    group.heading CTL.RH on RES.ID begin
+	print page.top, @cr,
+	trim(RPT.TITLE), @cr,
+	"milestone performance for ",
+	RES.NAME(RES via key), @cr,@cr,@cr,
+	@tab to 31, "  proj  value   quota  actual  remain  milest",@cr,
+	"milestone title",@tab to 33,
+	@tab to 31, "  lead  factr   hours   hours   hours  perfrm",@cr,
+	@cr,@cr
+    end
+    group.footing CTL.RF on RES.ID select RES. via key then begin
+ 	print @cr,
+	    trim(RES.NAME(RES via key)), " (",
+	    trim(CLA), "):", @cr
+	if WB # 0 then begin
+	    print "    Budget:", @tab to 25, B
+	    if WB # 1.0 then print " *", WB
+	    print @cr end
+	if WR # 0 then begin
+	    print "    Reliability:", @tab to 25, R
+	    if WR # 1.0 then print " *", WR
+	    print @cr end
+	if WM # 0 then begin
+	    print "    Milestone:", @tab to 25, M
+	    if WM # 1.0 then print " *", WM
+	    print @cr end
+	if WP # 0 then begin
+	    print "    Productivity:", @tab to 25, P
+	    if WP # 1.0 then print " *", WP
+	    print @cr end
+	if WB+WR+WM+WP # 0
+	    then move (B*WB + R*WR + M*WM + P*WP) / (WB+WR+WM+WP) to T
+	    else move 0.5 to T
+	print
+	    "  * total performance:",
+	    @tab to 40, T, @cr
+	if BAS # 0 then print 
+	    "    Base:",
+	    @tab to 25, BAS, @cr,
+	    "    Leverage:",
+	    @tab to 25, LEV, @cr,
+	    "  $ incentive amount:",
+	    @tab to 40, (BAS*(1.0+LEV*T)) as DOL, @cr
+    end
+
+%
+	M A I N
+%
+
+move USER.NAME to UNAME
+if IFILE = "*" then move "("+trim(UNAME)+")ID"+trim(QTR)+".DAT" to IFILE
+if not (file IFILE exists) then begin 
+    type "?incentive data file not found: ",IFILE,@cr
+    return end
+
+for each INC.DATA
+    if RES.ID = "*"
+	then move RPT.TITLE to RPT.TITLE of procedure
+	else insert into RES.
+
+for each NODE if
+    (ACT.BEG = default or <= DATE2) and
+    (ACT.FIN = default or >= DATE1) 
+    then FE.PROJ: begin
+	for each TASK via ID
+	    if (LDR # RES.ID) and (DOE >= DATE1 and <= DATE2)
+		then select RES. via key  % add up non-milestone hours %
+		    then alter RES. using (NMH+HOURS for NMH)
+	if default = LDR then finish FE.PROJ	% only LDR hours count %
+	select RES. via RES.ID=LDR then nothing
+	else finish FE.PROJ 		% no interest in this resource %
+	move LDR to TS.RES  		% only LDR hours go for incent %
+	include text "TASK.SUM"		% another for each TASK - tsk! %
+	if (HOURS # 0) or (QUOTA # REMAIN) then begin
+	    insert into TMP using (LDR for RES.ID)
+	    select RES. via RES.ID=RES.MGR(RES via RES.ID=LDR)
+		then insert into TMP using (MGR for RES.ID)
+	end
+end % for each NODE %
+
+move "(non-milestone)" to TITLE
+move 999999 to ID		% kludge to get it to appear last %
+move 0 to KIND,VALUE,QUOTA,REMAIN
+for each RES. begin
+    move RES.ID to LDR
+    move NMH to HOURS
+    insert into TMP		% non-milestone time %
+    move RES.MGR(RES via key) to RES.ID
+    select RES. via key
+	then insert into TMP	% counts for manager too %
+    subtract 1 from ID		% more kludge %
+end
+
+write report begin
+    move 0 to BUD.SUM,ACT.SUM,REM.SUM,VAL.SUM,PER.SUM,MH.SUM,NMH.SUM
+    for each TMP controlled by CTL.RH,CTL.RF begin
+	if QUOTA # default
+	    then move ((1.5*QUOTA - HOURS - REMAIN) as QQ)/(QUOTA as QQ) to PERF
+	    else move .5 as PERF to PERF
+	if default = QUOTA or VALUE
+	    then add HOURS to NMH.SUM
+	    else begin
+		add HOURS to MH.SUM
+	        add VALUE to VAL.SUM
+		add VALUE * QUOTA to BUD.SUM
+		add VALUE * HOURS to ACT.SUM
+		add VALUE * REMAIN to REM.SUM
+		add VALUE * PERF to PER.SUM
+	    end
+    	print
+    	    TITLE, 
+	    @tab 2, LDR
+	if default # VALUE and = QUOTA
+	    then print 
+		"  (",  VALUE,
+		") ",   QUOTA
+	    else print 
+		@tab 3, VALUE,
+		@tab 2, QUOTA
+	if KIND = 1
+	    then print "q"
+	    else print " "
+	print
+	    @tab 1, HOURS, 
+	    @tab 2, REMAIN
+ 	if QUOTA # default 
+	    then print 
+		@tab 2, PERF
+	print @cr
+	if RES.ID changing then begin
+	    if BUD.SUM # 0 
+		then move ((1.5*BUD.SUM-ACT.SUM-REM.SUM) as QQ)/(BUD.SUM as QQ) to PERF
+		else move .5 as PERF to PERF
+	    print @cr,
+		"* total milestone hours", @tab to (size(TITLE)+22),
+		MH.SUM, @cr,
+		"* total non-milestone hours", @tab to (size(TITLE)+22),
+		NMH.SUM, @cr,
+		"** weighted total", @tab to (size(TITLE)+8),
+		VAL.SUM, 
+		BUD.SUM, 
+		ACT.SUM, 
+		REM.SUM,
+		@tab 2, PERF, @cr
+	    select RES. via key then begin
+		if MH.SUM > NMH.SUM 		% set milestone weight %
+		    then move 1.0 to WM
+		    else move 0.5 to WM
+		move PERF to M			% set milestone perf %
+		alter RES. 
+	    end
+	    print @cr,@cr
+	    move 0 to VAL.SUM,BUD.SUM,ACT.SUM,REM.SUM,PER.SUM,MH.SUM,NMH.SUM
+	end
+    end	
+    print page.top,
+	QTR, " incentive summary", @cr,
+	RPT.TITLE, @cr,@cr,@cr,
+	" total   incentive",@cr,
+	"perfrm      amount    resource name (membership class)",@cr,@cr
+    for each RES. begin
+	if WB+WR+WM+WP # 0
+	    then move (B*WB + R*WR + M*WM + P*WP) / (WB+WR+WM+WP) to T
+	    else move 0.5 to T
+	print
+	    T, @tab 2,
+	    (BAS*(1.0+LEV*T)) as DOL, @tab 4,
+	    trim(RES.NAME(RES via key)), " (",
+	    trim(CLA), ")", @cr
+    end
+
+end
+
+end
