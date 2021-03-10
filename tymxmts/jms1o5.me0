@@ -1,0 +1,633 @@
+
+procedure EDIT.NODE
+begin
+
+fields
+  I as '5N',
+  TTYLINE as '192C',
+  TCOM as '16C',
+  TARG as '192C',
+  FNAM as '64C',
+  FVAL as '64C'
+                
+source TTY from terminal fixed form input TTYLINE
+
+relation SEL is
+  key ID
+
+procedure SCANTOKEN (SRC,TOK,REM)
+begin
+  move position(SRC,' ') to I
+  if I=0 then move length(SRC) to I
+  move upper.case(substr(SRC,1,I-1)) to TOK
+  move substr(SRC,I+1) to REM
+end
+
+TTYNEXT: begin type '>' for each TTY begin %TTYNEXT%
+  apply SCANTOKEN (TTYLINE,TCOM,TARG)
+  conditional on TCOM begin 
+    'F' or 'FI' or 'FIN' or 'FIND': begin 
+      for each NODE 
+        select SEL via key
+          then nothing
+          else insert into SEL
+      while length(TARG)>0 do FINDLOOP: begin
+	type '.'
+        apply SCANTOKEN (TARG,FNAM,TARG)
+        apply SCANTOKEN (TARG,FVAL,TARG)
+        conditional on FNAM begin
+          'ALL': nothing
+          'ID': begin
+	    if FVAL is not ID then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ID to ID
+	    delete from SEL where (ID # ID of EDIT.NODE)
+	  end
+          'UP': begin
+	    if FVAL is not UP then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as UP to UP
+	    for each NODE where (UP # UP of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'DN': begin
+	    if FVAL is not DN then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as DN to DN
+	    for each NODE where (DN # DN of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'PRED': begin
+	    if FVAL is not PRED then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as PRED to PRED
+	    for each NODE where (PRED # PRED of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'SUCC': begin
+	    if FVAL is not SUCC then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as SUCC to SUCC
+	    for each NODE where (SUCC # SUCC of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'LEVEL': begin
+	    if FVAL is not LEVEL then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as LEVEL to LEVEL
+	    for each NODE where (LEVEL # LEVEL of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'TITLE': begin
+	    if FVAL is not TITLE then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as TITLE to TITLE
+	    for each NODE where (TITLE # TITLE of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'MGR': begin
+	    if FVAL is not MGR then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as MGR to MGR
+	    for each NODE where (MGR # MGR of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'LDR': begin
+	    if FVAL is not LDR then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as LDR to LDR
+	    for each NODE where (LDR # LDR of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'DOE': begin
+	    if FVAL is not DOE then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as DOE to DOE
+	    for each NODE where (DOE # DOE of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'CLASS': begin
+	    if FVAL is not CLASS then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as CLASS to CLASS
+	    for each NODE where (CLASS # CLASS of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'VALUE': begin
+	    if FVAL is not VALUE then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as VALUE to VALUE
+	    for each NODE where (VALUE # VALUE of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'KIND': begin
+	    if FVAL is not KIND then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as KIND to KIND
+	    for each NODE where (KIND # KIND of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'EST.HRS': begin
+	    if FVAL is not EST.HRS then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as EST.HRS to EST.HRS
+	    for each NODE where (EST.HRS # EST.HRS of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'EST.BEG': begin
+	    if FVAL is not EST.BEG then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as EST.BEG to EST.BEG
+	    for each NODE where (EST.BEG # EST.BEG of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'EST.FIN': begin
+	    if FVAL is not EST.FIN then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as EST.FIN to EST.FIN
+	    for each NODE where (EST.FIN # EST.FIN of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'ACT.HRS': begin
+	    if FVAL is not ACT.HRS then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ACT.HRS to ACT.HRS
+	    for each NODE where (ACT.HRS # ACT.HRS of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'ACT.BEG': begin
+	    if FVAL is not ACT.BEG then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ACT.BEG to ACT.BEG
+	    for each NODE where (ACT.BEG # ACT.BEG of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'ACT.FIN': begin
+	    if FVAL is not ACT.FIN then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as ACT.FIN to ACT.FIN
+	    for each NODE where (ACT.FIN # ACT.FIN of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'IMPORTANCE': begin
+	    if FVAL is not IMPORTANCE then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as IMPORTANCE to IMPORTANCE
+	    for each NODE where (IMPORTANCE # IMPORTANCE of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'SCHED1': begin
+	    if FVAL is not SCHED1 then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as SCHED1 to SCHED1
+	    for each NODE where (SCHED1 # SCHED1 of EDIT.NODE)
+	      delete from SEL via key
+	  end
+          'SCHED2': begin
+	    if FVAL is not SCHED2 then begin
+	      type @cr,'?illegal value for ',FNAM,': ',trim(FVAL),@cr
+	      repeat FINDLOOP
+	    end
+	    move FVAL as SCHED2 to SCHED2
+	    for each NODE where (SCHED2 # SCHED2 of EDIT.NODE)
+	      delete from SEL via key
+	  end
+        end
+        else type '?<field-name> or ALL expected: ',trim(FNAM),@cr
+      end 
+      type count(SEL),' records selected.',@cr 
+    end 
+    'A' or 'AL' or 'ALT' or 'ALTE' or 'ALTER': begin 
+      while length(TARG)>0 do ALTERLOOP: begin
+        apply SCANTOKEN (TARG,FNAM,TARG)
+        apply SCANTOKEN (TARG,FVAL,TARG)
+	for each SEL select NODE via key then begin
+	    conditional on FNAM begin
+		'ID': type @cr,'?cant ALTER key field: ',trim(FNAM),@cr 
+		'UP': begin
+		    if FVAL is not UP then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as UP to UP
+		end
+		'DN': begin
+		    if FVAL is not DN then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as DN to DN
+		end
+		'PRED': begin
+		    if FVAL is not PRED then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as PRED to PRED
+		end
+		'SUCC': begin
+		    if FVAL is not SUCC then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as SUCC to SUCC
+		end
+		'LEVEL': begin
+		    if FVAL is not LEVEL then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as LEVEL to LEVEL
+		end
+		'TITLE': begin
+		    if FVAL is not TITLE then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as TITLE to TITLE
+		end
+		'MGR': begin
+		    if FVAL is not MGR then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as MGR to MGR
+		end
+		'LDR': begin
+		    if FVAL is not LDR then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP  end
+		    move FVAL as LDR to LDR
+		end
+		'DOE': begin
+		    if FVAL is not DOE then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as DOE to DOE
+		end
+		'CLASS': begin
+		    if FVAL is not CLASS then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as CLASS to CLASS
+		end
+		'VALUE': begin
+		    if FVAL is not VALUE then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as VALUE to VALUE
+		end
+		'KIND': begin
+		    if FVAL is not KIND then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as KIND to KIND
+		end
+		'EST.HRS': begin
+		    if FVAL is not EST.HRS then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as EST.HRS to EST.HRS
+		end
+		'EST.BEG': begin
+		    if FVAL is not EST.BEG then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as EST.BEG to EST.BEG
+		end
+		'EST.FIN': begin
+		    if FVAL is not EST.FIN then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as EST.FIN to EST.FIN
+		end
+		'ACT.HRS': begin
+		    if FVAL is not ACT.HRS then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as ACT.HRS to ACT.HRS
+		end
+		'ACT.BEG': begin
+		    if FVAL is not ACT.BEG then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as ACT.BEG to ACT.BEG
+		end
+		'ACT.FIN': begin
+		    if FVAL is not ACT.FIN then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as ACT.FIN to ACT.FIN
+		end
+		'IMPORTANCE': begin
+		    if FVAL is not IMPORTANCE then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as IMPORTANCE to IMPORTANCE
+		end
+		'SCHED1': begin
+		    if FVAL is not SCHED1 then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as SCHED1 to SCHED1
+		end
+		'SCHED2': begin
+		    if FVAL is not SCHED2 then begin
+			type @cr,'?illegal value for ',trim(FNAM),': ',trim(FVAL),@cr
+			repeat ALTERLOOP
+		    end
+		    move FVAL as SCHED2 to SCHED2
+		end
+	    end
+	    else type '?<field-name> or ALL expected: ',trim(FNAM),@cr
+	    alter NODE
+	end
+      end 
+    end 
+    'P' or 'PR' or 'PRI' or 'PRIN' or 'PRINT': Pcmd: for each SEL select NODE via key
+    then begin
+      move TARG to FVAL
+      while length(FVAL)>0 do begin
+        apply SCANTOKEN (FVAL,FNAM,FVAL)
+        conditional on FNAM begin
+          'ALL': type 
+            ID,' ',
+            UP,' ',
+            DN,' ',
+            PRED,' ',
+            SUCC,' ',
+            LEVEL,' ',
+            TITLE,' ',
+            MGR,' ',
+            LDR,' ',
+            DOE,' ',
+            CLASS,' ',
+            VALUE,' ',
+            KIND,' ',
+            EST.HRS,' ',
+            EST.BEG,' ',
+            EST.FIN,' ',
+            ACT.HRS,' ',
+            ACT.BEG,' ',
+            ACT.FIN,' ',
+            IMPORTANCE,' ',
+            SCHED1,' ',
+            SCHED2
+          'KEY' or 'KEYS': type 
+            ID
+          'ID': type ID
+          'UP': type UP
+          'DN': type DN
+          'PRED': type PRED
+          'SUCC': type SUCC
+          'LEVEL': type LEVEL
+          'TITLE': type TITLE
+          'MGR': type MGR
+          'LDR': type LDR
+          'DOE': type DOE
+          'CLASS': type CLASS
+          'VALUE': type VALUE
+          'KIND': type KIND
+          'EST.HRS': type EST.HRS
+          'EST.BEG': type EST.BEG
+          'EST.FIN': type EST.FIN
+          'ACT.HRS': type ACT.HRS
+          'ACT.BEG': type ACT.BEG
+          'ACT.FIN': type ACT.FIN
+          'IMPORTANCE': type IMPORTANCE
+          'SCHED1': type SCHED1
+          'SCHED2': type SCHED2
+        end
+        else begin
+          type '?<field-name>, KEY or ALL expected: ',trim(FNAM),@cr
+          finish Pcmd
+        end
+        if length(FVAL)>0 then type ' ' else type @cr
+      end 
+    end
+    else type '?missing instance',@cr 
+    'L' or 'LI' or 'LIS' or 'LIST': Lcmd: for each SEL select NODE via key
+    then begin
+      move TARG to FVAL
+      while length(FVAL)>0 do begin
+        apply SCANTOKEN (FVAL,FNAM,FVAL)
+        conditional on FNAM begin
+          'ALL': type 
+            'ID ',@tab to 24,ID,@cr,
+            'UP ',@tab to 24,UP,@cr,
+            'DN ',@tab to 24,DN,@cr,
+            'PRED ',@tab to 24,PRED,@cr,
+            'SUCC ',@tab to 24,SUCC,@cr,
+            'LEVEL ',@tab to 24,LEVEL,@cr,
+            'TITLE ',@tab to 24,TITLE,@cr,
+            'MGR ',@tab to 24,MGR,@cr,
+            'LDR ',@tab to 24,LDR,@cr,
+            'DOE ',@tab to 24,DOE,@cr,
+            'CLASS ',@tab to 24,CLASS,@cr,
+            'VALUE ',@tab to 24,VALUE,@cr,
+            'KIND ',@tab to 24,KIND,@cr,
+            'EST.HRS ',@tab to 24,EST.HRS,@cr,
+            'EST.BEG ',@tab to 24,EST.BEG,@cr,
+            'EST.FIN ',@tab to 24,EST.FIN,@cr,
+            'ACT.HRS ',@tab to 24,ACT.HRS,@cr,
+            'ACT.BEG ',@tab to 24,ACT.BEG,@cr,
+            'ACT.FIN ',@tab to 24,ACT.FIN,@cr,
+            'IMPORTANCE ',@tab to 24,IMPORTANCE,@cr,
+            'SCHED1 ',@tab to 24,SCHED1,@cr,
+            'SCHED2 ',@tab to 24,SCHED2,@cr
+          'KEY' or 'KEYS': type 
+            'ID ',@tab to 24,ID,@cr
+          'ID': type 'ID ',@tab to 24,ID,@cr
+          'UP': type 'UP ',@tab to 24,UP,@cr
+          'DN': type 'DN ',@tab to 24,DN,@cr
+          'PRED': type 'PRED ',@tab to 24,PRED,@cr
+          'SUCC': type 'SUCC ',@tab to 24,SUCC,@cr
+          'LEVEL': type 'LEVEL ',@tab to 24,LEVEL,@cr
+          'TITLE': type 'TITLE ',@tab to 24,TITLE,@cr
+          'MGR': type 'MGR ',@tab to 24,MGR,@cr
+          'LDR': type 'LDR ',@tab to 24,LDR,@cr
+          'DOE': type 'DOE ',@tab to 24,DOE,@cr
+          'CLASS': type 'CLASS ',@tab to 24,CLASS,@cr
+          'VALUE': type 'VALUE ',@tab to 24,VALUE,@cr
+          'KIND': type 'KIND ',@tab to 24,KIND,@cr
+          'EST.HRS': type 'EST.HRS ',@tab to 24,EST.HRS,@cr
+          'EST.BEG': type 'EST.BEG ',@tab to 24,EST.BEG,@cr
+          'EST.FIN': type 'EST.FIN ',@tab to 24,EST.FIN,@cr
+          'ACT.HRS': type 'ACT.HRS ',@tab to 24,ACT.HRS,@cr
+          'ACT.BEG': type 'ACT.BEG ',@tab to 24,ACT.BEG,@cr
+          'ACT.FIN': type 'ACT.FIN ',@tab to 24,ACT.FIN,@cr
+          'IMPORTANCE': type 'IMPORTANCE ',@tab to 24,IMPORTANCE,@cr
+          'SCHED1': type 'SCHED1 ',@tab to 24,SCHED1,@cr
+          'SCHED2': type 'SCHED2 ',@tab to 24,SCHED2,@cr
+        end
+        else begin
+          type '?<field-name>, KEY or ALL expected: ',trim(FNAM),@cr
+          finish Lcmd
+        end
+        if length(FVAL)=0 then type @cr
+      end 
+    end
+    else type '?missing instance',@cr 
+    'C' or 'CH' or 'CHA' or 'CHANGE': Ccmd: for each SEL select NODE via key
+    then begin
+      move TARG to FVAL
+      while length(FVAL)>0 do begin
+        apply SCANTOKEN (FVAL,FNAM,FVAL)
+        conditional on FNAM begin
+          'ALL': type 
+            'ID ',@tab to 24,ID,@cr,
+            'UP ',@tab to 24,UP,@cr,
+            'DN ',@tab to 24,DN,@cr,
+            'PRED ',@tab to 24,PRED,@cr,
+            'SUCC ',@tab to 24,SUCC,@cr,
+            'LEVEL ',@tab to 24,LEVEL,@cr,
+            'TITLE ',@tab to 24,TITLE,@cr,
+            'MGR ',@tab to 24,MGR,@cr,
+            'LDR ',@tab to 24,LDR,@cr,
+            'DOE ',@tab to 24,DOE,@cr,
+            'CLASS ',@tab to 24,CLASS,@cr,
+            'VALUE ',@tab to 24,VALUE,@cr,
+            'KIND ',@tab to 24,KIND,@cr,
+            'EST.HRS ',@tab to 24,EST.HRS,@cr,
+            'EST.BEG ',@tab to 24,EST.BEG,@cr,
+            'EST.FIN ',@tab to 24,EST.FIN,@cr,
+            'ACT.HRS ',@tab to 24,ACT.HRS,@cr,
+            'ACT.BEG ',@tab to 24,ACT.BEG,@cr,
+            'ACT.FIN ',@tab to 24,ACT.FIN,@cr,
+            'IMPORTANCE ',@tab to 24,IMPORTANCE,@cr,
+            'SCHED1 ',@tab to 24,SCHED1,@cr,
+            'SCHED2 ',@tab to 24,SCHED2,@cr
+          'KEY' or 'KEYS': type 
+            'ID ',@tab to 24,ID,@cr
+          'ID': type 'ID ',@tab to 24,ID,@cr
+          'UP': type 'UP ',@tab to 24,UP,@cr
+          'DN': type 'DN ',@tab to 24,DN,@cr
+          'PRED': type 'PRED ',@tab to 24,PRED,@cr
+          'SUCC': type 'SUCC ',@tab to 24,SUCC,@cr
+          'LEVEL': type 'LEVEL ',@tab to 24,LEVEL,@cr
+          'TITLE': type 'TITLE ',@tab to 24,TITLE,@cr
+          'MGR': type 'MGR ',@tab to 24,MGR,@cr
+          'LDR': type 'LDR ',@tab to 24,LDR,@cr
+          'DOE': type 'DOE ',@tab to 24,DOE,@cr
+          'CLASS': type 'CLASS ',@tab to 24,CLASS,@cr
+          'VALUE': type 'VALUE ',@tab to 24,VALUE,@cr
+          'KIND': type 'KIND ',@tab to 24,KIND,@cr
+          'EST.HRS': type 'EST.HRS ',@tab to 24,EST.HRS,@cr
+          'EST.BEG': type 'EST.BEG ',@tab to 24,EST.BEG,@cr
+          'EST.FIN': type 'EST.FIN ',@tab to 24,EST.FIN,@cr
+          'ACT.HRS': type 'ACT.HRS ',@tab to 24,ACT.HRS,@cr
+          'ACT.BEG': type 'ACT.BEG ',@tab to 24,ACT.BEG,@cr
+          'ACT.FIN': type 'ACT.FIN ',@tab to 24,ACT.FIN,@cr
+          'IMPORTANCE': type 'IMPORTANCE ',@tab to 24,IMPORTANCE,@cr
+          'SCHED1': type 'SCHED1 ',@tab to 24,SCHED1,@cr
+          'SCHED2': type 'SCHED2 ',@tab to 24,SCHED2,@cr
+        end
+        else begin
+          type '?<field-name>, KEY or ALL expected: ',trim(FNAM),@cr
+          finish Ccmd
+        end
+        if length(FVAL)=0 then type @cr
+      end 
+    end
+    else type '?missing instance',@cr 
+    'N' or 'NA' or 'NAM' or 'NAME' or 'NAMES': type
+        'fileds names are',@cr,
+        '  ID -key',@cr ,
+        '  UP',@cr ,
+        '  DN',@cr ,
+        '  PRED',@cr ,
+        '  SUCC',@cr ,
+        '  LEVEL',@cr ,
+        '  TITLE',@cr ,
+        '  MGR',@cr ,
+        '  LDR',@cr ,
+        '  DOE',@cr ,
+        '  CLASS',@cr ,
+        '  VALUE',@cr ,
+        '  KIND',@cr ,
+        '  EST.HRS',@cr ,
+        '  EST.BEG',@cr ,
+        '  EST.FIN',@cr ,
+        '  ACT.HRS',@cr ,
+        '  ACT.BEG',@cr ,
+        '  ACT.FIN',@cr ,
+        '  IMPORTANCE',@cr ,
+        '  SCHED1',@cr ,
+        '  SCHED2',@cr 
+    '?' or 'H' or 'HE' or 'HEL' or 'HELP': type 
+        'enter one of',@cr,
+        '  FIND ALL             - select all instances',@cr,
+        '  FIND f1 v1 f2 v2 ... - select instances where field=val',@cr,
+        '  PRINT ALL            - print all fields for',@cr,
+        '  PRINT KEY            - print key fields for',@cr,
+        '  PRINT f1 f2 f3 ...   - print named fields',@cr,
+        '  LIST ALL             - list all fields',@cr,
+        '  LIST KEY             - list key fields',@cr,
+        '  LIST f1 f2 f3 ...    - list named fields',@cr,
+	'  ALTER f1 v1 f2 v2 ...- alter values of fields',@cr,
+        '  NAMES                - list names of fields',@cr,
+        '  QUIT',@cr,
+        '  HELP',@cr,
+        '  ?',@cr 
+    'Q' or 'QUIT': finish TTYNEXT
+  end
+  else type '?command not recognized: ',TCOM,@cr
+  type '>'
+end end %TTYNEXT%
+
+end %EDIT.NODE%
+ (@1K
