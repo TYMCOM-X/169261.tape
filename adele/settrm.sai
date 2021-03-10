@@ -1,0 +1,589 @@
+require 790226 version;
+
+require "{}()" delimiters;
+define
+  ! = {comment},
+  forever = {while true},
+  never = {while false},
+  nothing = {},
+  upto = {step 1 until},
+  downto = {step -1 until},
+  repeat (foo) = {_(foo)-1 step -1 until 0},
+  assert (be) = {if be then else usererr(0,1,cvps(be)&" failed")},
+  ctrl (c) = {(((c) land '37)&null)},
+  nl = {'15&'12},
+  bit (i) = {(1 lsh (35-(i)))};
+let
+  r!p = record!pointer;
+define
+  auxcli (port,e,funct) = {auxclr(port,memory[e],funct)};
+define
+  lh (i) = {((I) lsh -18)},
+  hl (i) = {((I) lsh 18)},
+  rh (i) = {((I) land '777777)},
+  hr (i) = {((I) land '777777)};
+
+
+external boolean !SKIP!;
+external boolean RPGSW;
+
+define Stpt = {(if RPGSW then 1 else 0)};
+
+procedure Parse (string File;
+	reference integer Name,
+			Ext,
+			PPN);
+begin "Parse"
+    Name _ cvfil (File, Ext, PPN);
+    if PPN = 0 then PPN _ calli(0,'24);	! GETPPN;
+    if lh(PPN) = 0 then begin "UserName"
+	integer array LKB[0:3];
+	integer Chan,Eof;
+	LKB[0] _ arrinfo(LKB,2);
+	LKB[1] _ calli('16,'41);	! MFD PPN;
+	LKB[2] _ PPN;
+	LKB[3] _ cvsix("UFD");
+	open (Chan_getchan, "DSK", '17,0,0, 0,0,Eof);
+	if Eof then return;
+	chnior (Chan, LKB[0], 4);
+	release (Chan);
+	PPN _ LKB[2];
+	end "UserName";
+    end "Parse";
+
+!	SetAlp sets alternate logout program name in monitor
+
+	SetAlp ( File )
+		or
+	SetAlp
+;
+
+
+simple boolean procedure SetALP (string File(null));
+begin "SetALP"
+    own integer array Foo[0:2];
+    if length(File)
+	then Parse (File, Foo[2], Foo[0], Foo[1])
+	else begin
+	    Foo[2] _ calli('777777000003,'41);	! JBTNAM;
+	    Foo[1] _ calli(-'25,'41);		! JBTFPN;
+	    end;
+    Foo[0] _ cvsix("DSK");
+    calli (location(Foo[0]),-'127);
+    return (!SKIP!);
+    end;
+
+simple boolean procedure KjobPending;
+return (calli(hl(-1),'41)land '100);
+
+simple integer procedure GetTab (integer I,J);
+start!code
+	HRL 1,I;
+	HRR 1,J;
+	CALLI 1,'41;
+	  JRST 4,0;
+end;	
+
+simple string procedure user;
+return(cv6str(gettab(-1,-'22))&cv6str(gettab(-1,-'21)));
+
+simple string procedure DetachedJobList;
+begin
+    integer HighJob,J,MyAun;
+    string JL;
+    JL _ null;
+    MyAUN _ gettab(-1,-'23);
+    HighJob _ gettab('20,'12);
+    for J _ 1 upto HighJob do
+	if gettab(J,-'23)=MyAun			! check AUN;
+	    and gettab(J,0) land bit(15)	! check JLOG;
+	    and gettab(J,6) land bit(1)=0	! check NOATT;
+	    and gettab(J,-'27) lsh -18=0	! check LDB;
+	    then JL _ JL & "," & cvs(J);
+    !SKIP! _ lop(JL);
+    return(JL);
+end;
+
+simple procedure Attach(integer Job,Bits(0));
+begin
+    calli(hl(bits)+hr(job),-6);			! ATTACH;
+    calli(bit(17),-'130);			! LOGOFF (in case);
+end;
+
+comment
+  Procedure to do SETLCH and GETLCH pair to change something;
+
+simple procedure SETLCH(integer port,value,bits);
+begin
+  own integer PTR,TMP;
+  PTR:=point(1,TMP,bits);
+  TMP:=port;
+  start!code
+    define GETLCH = '051300000000, SETLCH = '051340000000;
+    GETLCH TMP;
+    MOVE 1,value;
+    DPB 1,PTR;
+    SETLCH TMP;
+    end;
+  end;
+
+comment
+  Functions for user to get information about terminal;
+
+simple integer procedure IN!BAUD;
+begin integer I; auxclr(-1,I:=-1,'15); return(I); end;
+
+simple integer procedure OUT!BAUD;
+begin integer I; auxclr(-1,I:=-1,'16); return(I); end;
+
+simple integer procedure NODE;
+begin integer I; I_gettab(-1,-'24);
+  return(((I lsh -10)land '7700)lor((I lsh -8)land '77)); end;
+
+simple integer procedure PORT;
+return(gettab(-1,-'24) land '177);
+
+simple integer procedure TIC;
+return((gettab(-1,-'24) lsh -24)land '17);
+
+simple integer procedure STATES;
+begin return(gettab('17,'11)); end;
+
+define
+  STSHUT = {'400000}, SHUT = {'400000},
+  STSUPR = {'200000}, SUPER = {'200000}, SUER!SHUT = {'200000},
+  RESTRICTED = {'100000},
+  STRLB = {'100000}, RESTRICTED!LOGINS = {'100000};
+
+simple string procedure STATE!NAME; begin
+  case STATES lsh -15 land 7 of begin
+    [0] return("answered");
+    [1] return("restricted");
+    [2][3][6][7] return("super-shut");
+    [4] return("shut");
+    [5] return("restricted + shut");
+    else return(cvos(STATES)) end;
+  end;
+
+define
+  TIC!AUX = {0}, TIC!A = {1}, TIC!C = {2}, TIC!E = {3},
+  TIC!G = {4}, TIC!B = {5}, TIC!F = {6}, TIC!J = {7},
+  TIC!CR = {'11}, TIC!D = {'12}, TIC!RJE = {'13},
+  TIC!2780 = {'13}, TIC!1200 = {'14};
+
+simple string procedure HARDWARE;
+begin integer FOO;
+  start!code setz; blt; hrrzm FOO; end;
+  return(case FOO of ("KI-10",
+	(if gettab('20,'11) land '70000
+	    then "KS-10" else "KL-10"))); end;
+
+simple string procedure SoftWare;
+return (cvastr(gettab(0,'11))
+	& cvastr(gettab('1,'11))
+	& cvastr(gettab('2,'11))
+	& cvastr(gettab('3,'11))
+	& cvastr(gettab('4,'11)));
+
+comment
+  Procedure to run another program;
+
+procedure Run (string File; integer Start(0));
+begin
+    integer array RNB[0:5];
+    Parse (File, RNB[1], RNB[2], RNB[4]);
+    RNB[0] _ cvsix("DSK");
+    RNB[3] _ RNB[5] _ 0;
+    calli ((Start lsh 18) + location(RNB[0]), '35);
+    end;
+
+comment
+  Definitions to set license on job;
+
+simple procedure SetLic(integer Lic);
+if calli(-'25,'41)=calli(-'23,'41) then calli(lic,-'10);
+
+simple integer procedure MyLic;
+return ((gettab(-1,-'20) land '777777000000) 
+	lor (gettab(-1,-'20) lsh -18));
+
+comment
+  AUXCAL's to control parity;
+
+define EVEN!PARITY =
+{ auxclv(-1,1,'17)};
+
+define EVEN = {EVEN!PARITY};
+define PARITY = {EVEN!PARITY};
+
+define NO!PARITY =
+{ auxclv(-1,0,'17)};
+
+comment
+  AUXCAL's to set terminal speed;
+
+define INPUT (rate) =
+{ auxclv(-1,rate,'15)};
+
+define OUTPUT (rate) =
+{ auxclv(-1,rate,'16)};
+
+define BAUD (rate) = 
+{ begin
+  auxclv(-1,rate,'15);
+  auxclv(-1,rate,'16);
+  end};
+
+define SPEED (rate) = {BAUD(rate)};
+
+define 
+  BAUD!110 = {0},
+  BAUD!150 = {1},
+  BAUD!300 = {2},
+  BAUD!400 = {3},
+  BAUD!600 = {4},
+  BAUD!1200 = {5},
+  BAUD!300!EBCDIC = {6},
+  BAUD!150!EBCDIC = {7};
+define
+  CPS!10 = {0},
+  CPS!15 = {1},
+  CPS!30 = {2},
+  CPS!40 = {3},
+  CPS!60 = {4},
+  CPS!120 = {5},
+  CPS!30!EBCDIC = {6},
+  CPS!15!EBCDIC = {7};
+
+comment
+  Definitions to handle auto-lf and duplex;
+
+define HALF =
+{ auxclv(-1,1,'20)};
+
+define FULL =
+{ auxclv(-1,0,'20)};
+
+define HDX = {HALF};
+define HALF!DUPLEX = {HALF};
+define FDX = {FULL};
+define FULL!DUPLEX = {FULL};
+
+define AUTO!LF =
+{ setlch(-1,0,16)};
+
+define NO!AUTO!LF =
+{ setlch(-1,1,16)};
+
+define LF = {AUTO!LF};
+define NO!LF = {NO!AUTO!LF};
+define PAPER!TAPE = {NO!AUTO!LF};
+define NO!PAPER!TAPE = {AUTO!LF};
+define TAPE = {NO!AUTO!LF};
+define NO!TAPE = {AUTO!LF};
+define KEY = {AUTO!LF};
+define XON = {NO!AUTO!LF};
+define XOFF = {AUTO!LF};
+
+comment
+  Definitions to set line WIDTH and CRLF;
+
+define WIDTH (x) =
+{ auxclv(-1,x,'27)};
+
+define LINE!WIDTH = {WIDTH};
+
+define CRLF =
+{ setlch(-1,0,10)};
+
+define NO!CRLF =
+{ setlch(-1,1,10)};
+
+comment
+  Definitions to set scope characteristics;
+
+define REV!XON =
+{ auxclv(-1,1,'55)};
+
+define NO!REV!XON =
+{ auxclv(-1,0,'55)};
+
+define STALL = {REV!XON};
+define NO!STALL = {NO!REV!XON};
+
+define BACKSPACE =
+{ auxclv(-1,1,'57)};
+
+define NO!BACKSPACE =
+{ auxclv(-1,0,'57)};
+
+define BS = {BACKSPACE};
+define NO!BS = {NO!BACKSPACE};
+
+define ERASE =
+{ auxclv(-1,1,'62)};
+
+define NO!ERASE =
+{ auxclv(-1,0,'62)};
+
+comment
+  Definitions to set VT, FF, HT;
+
+define TAB =
+{ setlch(-1,1,14)};
+
+define NO!TAB =
+{ setlch(-1,0,14)};
+
+define HT = {TAB};
+define TABS = {TAB};
+define NO!HT = {NO!TAB};
+define NO!TABS = {NO!TAB};
+
+define FORM =
+{ setlch(-1,1,17)};
+
+define NO!FORM =
+{ setlch(-1,0,17)};
+
+define FF = {FORM};
+define FORMS = {FORM};
+define NO!FF = {NO!FORM};
+define NO!FORMS = {NO!FORM};
+
+comment
+  Definitions to handle LC;
+
+define LC =
+{ setlch(-1,1,13)};
+
+define NO!LC =
+{ setlch(-1,0,13)};
+
+define LOWER = {LC};
+define ASCII = {LC};
+define UPPER = {NO!LC};
+define TELETYPE = {NO!LC};
+
+comment
+  Definitions for FF-fill and HT-fill;
+
+define FF!FILL (x) =
+{ auxclv(-1,x,'30)};
+
+define HT!FILL (x) =
+{ auxclv(-1,x,'31)};
+
+define FORM!FEED!FILL (x) = {FF!FILL(x)};
+define FORM!FEED!FILLER (x) = {FF!FILL(x)};
+define FF!FILLER (x) = {FF!FILL(x)};
+define TAB!FILL (x) = {HT!FILL(x)};
+define TAB!FILLER (x) = {HT!FILL(x)};
+define HT!FILLER (x) = {HT!FILL(x)};
+
+comment
+  Definitions to control CR and LF delay;
+
+define A (x) =
+{ auxclv(-1,x,'21)};
+
+define B (x) =
+{ auxclv(-1,x,'22)};
+
+define C (x) =
+{ auxclv(-1,x,'23)};
+
+define SET!A (x) = {A(x)};
+define SET!B (x) = {B(x)};
+define SET!C (x) = {C(x)};
+
+define CR!DELAY =
+{ auxclv(-1,1,'14)};
+
+define LF!DELAY =
+{ auxclv(-1,0,'14)};
+
+define DELAY!CR = {CR!DELAY};
+define DELAY!LF = {LF!DELAY};
+define 
+  A!1 = {0}, A!2 = {1}, A!4 = {2}, A!8 = {3}, A!16 = {4},
+  A!32 = {5}, A!64 = {6}, A!128 = {7};
+define
+  B!0 = {0}, B!1 = {1}, B!2 = {2}, B!3 = {3}, B!4 = {4},
+  B!5 = {5}, B!6 = {6}, B!7 = {7};
+define
+  C!0 = {0}, C!1 = {1}, C!2 = {2}, C!3 = {3}, C!4 = {4},
+  C!5 = {5}, C!7 = {6}, C!10 = {7}, C!14 = {8}, C!19 = {9},
+  C!26 = {10}, C!36 = {11}, C!50 = {12}, C!69 = {13},
+  C!95 = {14}, C!131 = {15};
+
+comment
+  Set host MODEs - PDP or TYME
+define PDP =
+{ start!code
+  hrroi 6;
+  calli '41;
+  jfcl;
+  trz '600;
+  calli -'11;
+  end};
+
+define TYMEX =
+{ start!code
+  hrroi 6;
+  calli '41;
+  jfcl;
+  trz '600;
+  tro '200;
+  calli -'11;
+  end};
+
+define PDP10 = {PDP};
+define XEXEC = {TYMEX};
+define EXEC = {TYMEX};
+define TIME (x) =
+{ start!code
+  hrroi 6;
+  calli '41;
+  jfcl;
+  tlz '76000;
+  tlo x;
+  calli -'11;
+  jfcl;
+  end};
+
+define TIME!ZONE (x) = {TIME(x)};
+define 
+  PST = {'20000}, PDT = {PST}, PACIFIC!TIME = {PST},
+  MST = {'22000}, MDT = {MST}, MOUNTAIN!TIME = {MST},
+  CST = {'24000}, CDT = {CST}, CENTRAL!TIME = {CST},
+  EST = {'26000}, EDT = {EST}, EASTERN!TIME = {EST};
+
+simple integer procedure RESPONSE!TIME; begin "RT"
+  integer START;
+  calli('40000000,'72);
+  START:=call(0,"MSTIME");
+  calli('40000000,'72);
+  return(call(0,"MSTIME")-START);
+  end "RT";
+
+simple integer procedure LOAD!AVERAGE; begin "LOAD"
+  return(100-calli('35000012,'41)*100/calli('27000011,'41));
+  end "LOAD";
+
+define EXIT =
+{ call(0,"EXIT")};
+
+COMMENT routines to set up TMPCOR file for RPG
+
+-addproc(procname,file,ppn)
+
+-set(<rpg,ddt>,file,ppn)
+
+-default(name)
+
+-addnon(name,ppn,switch,lookup ext,next proc,out ext)
+
+-setmail(name,ext)
+
+-ctest   -call this one last, outputs the TMPCOR file
+;
+
+integer array procbuf[0:59],nonbuf[0:59],setbuf[0:49];
+integer nproc,nnon,nset,defnam;
+string mailbox,mailext;
+define rpg=1, sproc=2, ddt=3, nonstandard=6, dfault=5, mail=7;
+
+define ppn (gan,uun) = {((('gan)lsh 18)+(('uun)land '777777))};
+define sys = '1000004;
+
+procedure default(string name);
+begin "DEFAULT"
+   defnam_cvsix(name);
+   return;
+end "DEFAULT";
+
+
+procedure addproc(string oldproc,newproc; integer !ppn);
+begin "ADDPROC"
+   own integer procptr;
+
+   nproc_nproc+1;
+   procbuf[procptr]_cvsix(oldproc); procptr_procptr+1;
+   procbuf[procptr]_cvsix("DSK"); procptr_procptr+1;
+   procbuf[procptr]_cvsix(newproc); procptr_procptr+3;
+   procbuf[procptr]_!ppn; procptr_procptr+2;
+   return;
+end "ADDPROC";
+
+
+procedure addnon(string name; integer !ppn; string switch,lukext,nxtproc,
+	outext);
+begin "ADDNON"
+   own integer nonptr;
+
+   nnon_nnon+1;
+   nonbuf[nonptr]_cvsix(name); nonptr_nonptr+2;
+   nonbuf[nonptr]_!ppn; nonptr_nonptr+1;
+   nonbuf[nonptr]_cvsix("DSK"); nonptr_nonptr+1;
+   nonbuf[nonptr]_cvsix(switch); nonptr_nonptr+1;
+   nonbuf[nonptr]_cvsix(lukext); nonptr_nonptr+1;
+   nonbuf[nonptr]_cvsix(nxtproc); nonptr_nonptr+1;
+   nonbuf[nonptr]_cvsix(outext); nonptr_nonptr+1;
+   return;
+end "ADDNON";
+
+
+procedure set(integer type; string newproc; integer !ppn);
+begin "SET"
+   own integer setptr;
+
+   nset_nset+1;
+   setbuf[setptr]_(type lsh 18)+4; setptr_setptr+1;
+   setbuf[setptr]_cvsix("DSK"); setptr_setptr+1;
+   setbuf[setptr]_cvsix(newproc); setptr_setptr+2;
+   setbuf[setptr]_!ppn; setptr_setptr+1;
+   return;
+end "SET";
+
+
+procedure setmail(string NAM("MAIL"),EXT("BOX")); begin
+   MAILBOX:=NAM;
+   MAILEXT:=EXT;
+   end;
+
+procedure ctest;
+begin "CTEST"
+   integer array tmpbuf[0:199],desc[0:1]; integer bufptr;
+
+   if nproc>0 then begin
+      tmpbuf[bufptr]_(sproc lsh 18)+nproc*7; bufptr_bufptr+1;
+      arrblt(tmpbuf[bufptr],procbuf[0],nproc*7+1);
+      bufptr_bufptr+nproc*7;
+   end;
+   if nnon>0 then begin
+      tmpbuf[bufptr]_(nonstandard lsh 18)+nnon*8; bufptr_bufptr+1;
+      arrblt(tmpbuf[bufptr],nonbuf[0],nnon*8+1);
+      bufptr_bufptr+nnon*8;
+   end;
+   if nset>0 then begin
+      arrblt(tmpbuf[bufptr],setbuf[0],nset*5);
+      bufptr_bufptr+nset*5;
+   end;
+   if defnam neq 0 then begin
+      tmpbuf[bufptr]_(dfault lsh 18)+1; bufptr_bufptr+1;
+      tmpbuf[bufptr]_defnam; bufptr_bufptr+1;
+   end;
+   if mailbox then begin
+      tmpbuf[bufptr]_(mail lsh 18)+6; bufptr_bufptr+1;
+      tmpbuf[bufptr]_5; bufptr_bufptr+1;
+      tmpbuf[bufptr]_gettab(-1,-'23); bufptr_bufptr+1;
+      tmpbuf[bufptr]_cvsix(mailbox); bufptr_bufptr+1;
+      tmpbuf[bufptr]_cvsix(mailext); bufptr_bufptr+1;
+      bufptr_bufptr+2;
+   end;
+   desc[0]_cvsix("RPG");
+   desc[1]_(-bufptr lsh 18)+location(tmpbuf[0])-1;
+   call((3 lsh 18)+location(desc[0]),"tmpcor");
+end "CTEST";
+  u[?6 
