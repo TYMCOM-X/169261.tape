@@ -1,0 +1,230 @@
+procedure MTX
+begin
+
+controls for relations concurrent update
+
+field
+    L as "80C",
+    S as "80C",
+    CMD same as L,
+    I as "5N",
+    RES.RES.ID same as RES.ID,
+    QTR. same as QTR,
+    GNAME as "12C",		% GFDd directory name %
+    PARSE.BREAK as "1C",
+    FILE1 same as OFILE,	% i/o files %
+    FILE2 same as OFILE,
+    DATE1LQ same as DATE1,	% date ranges, default to last quarter %
+    DATE2LQ same as DATE2,	
+    QTRLQ same as QTR,
+    DATE1NQ same as DATE1,	% date ranges, default to next quarter %
+    DATE2NQ same as DATE2,
+    QTRNQ same as QTR
+
+source CMDS from "TERM"
+    fixed form
+    input L,@cr
+
+source NEWS.TXT from "(TYMXMTS)NEWS.TXT"
+    fixed form
+    input L,@cr
+
+%
+	internal procedures
+%
+include text "PARSE" %( source.string, token.string )%
+
+%
+	command level loop
+%
+move USER.NAME to UNAME
+move substr(WHO,25) to GNAME
+if UNAME = GNAME then move default to GNAME
+move "????" to RES.ID
+move default to RES.ROOT
+for each RES 
+    if RES.UNAME = UNAME then begin
+	move RES.ID to RES.ID of procedure,RES.RES.ID
+	move RES.ROOT to RES.ROOT of procedure
+    end
+move " " to PARSE.BREAK
+type trim(GNAME),">"
+for each CMDS 
+begin
+    move upper.case(L) to L
+    apply PARSE (L,CMD)
+    move default to ROOT,DATE1,DATE2,QTR,FILE1,FILE2,SW
+    move 0 to LEVEL1
+    move 9 to LEVEL2
+    move RES.RES.ID to RES.ID
+    while L # default do begin
+	apply PARSE (L,ARG)
+	if ARG is QTR 
+	    then move ARG as QTR to QTR.
+	    else move "????" to QTR.
+	if ARG="ALL" then move 1 to ROOT
+	else if substr(ARG,1,1) = "/" then move trim(SW) + ARG to SW
+	else select RES via (RES.ID=ARG) then move ARG as RES.ID to RES.ID
+	else select NICKNAMES via (UNAME,NICKNAME=ARG) then move ID to ROOT
+	else if ARG is ROOT then move ARG as ROOT to ROOT
+	else if QTR. not illegal then move QTR. to QTR
+	else if ARG is date "MMMYY" then begin
+	    move ARG as date "MMMYY" to DATE1
+	    move 1 to day(DATE1)
+	    move LAST.DAY(DATE1) to DATE2 end
+	else if ARG is date "ZM/ZD/YY" then if DATE1 = default
+	    then move ARG as date "ZM/ZD/YY" to DATE1
+	    else move ARG as date "ZM/ZD/YY" to DATE2
+	else if position(ARG,"-") > 0 then begin
+	    move position(ARG,"-") to I
+	    if I>1 then move substr(ARG,1,I-1) as LEVEL1 to LEVEL1
+	    if I<length(ARG) then move substr(ARG,I+1) as LEVEL2 to LEVEL2 end
+	else if ARG is FILE1 then if FILE1 = default
+	    then move ARG as FILE1 to FILE1
+	    else move ARG as FILE2 to FILE2
+	else begin
+	    type '?unrecognized argument "',trim(ARG),'" - type "?" for help',@cr
+	    move default to CMD,L
+	end
+    end
+    if default = DATE1 and = DATE2 and # QTR then begin
+	move substr(QTR,3) as "NN" + 1900 to year(DATE1),year(DATE2)
+	move (substr(QTR,1,1) as "N") * 3 - 2 to month(DATE1)
+	move next.date(SATURDAY,first.day(DATE1)-1) to DATE1
+	move month(DATE1) + 2 to month(DATE2)
+	move next.date(FRIDAY,last.day(DATE2)-1) to DATE2
+    end
+    move DATE1 to DATE1LQ,DATE1NQ
+    move DATE2 to DATE2LQ,DATE2NQ
+    move QTR to QTRLQ,QTRNQ
+    if default = DATE1 and DATE2 then begin
+    	move today - 30 to DATE1LQ
+    	move (month(DATE1LQ)-1)/3*3+1 to month(DATE1LQ)
+    	move DATE1LQ to DATE2LQ,DATE1NQ,DATE2NQ
+    	add 2 to month(DATE2LQ)
+	add 3 to month(DATE1NQ)
+	add 5 to month(DATE2NQ)
+    	move first.day(DATE1LQ) to DATE1LQ
+    	move last.day(DATE2LQ) to DATE2LQ
+    	move first.day(DATE1NQ) to DATE1NQ
+    	move last.day(DATE2NQ) to DATE2NQ
+    	move next.date(SATURDAY,DATE1LQ-1) to DATE1LQ
+    	move next.date(FRIDAY,DATE2LQ-1) to DATE2LQ
+    	move next.date(SATURDAY,DATE1NQ-1) to DATE1NQ
+    	move next.date(FRIDAY,DATE2NQ-1) to DATE2NQ
+	move (((month(DATE1LQ)+2)/3) as "C")+"Q"+((DATE1LQ as date "YY") as "CC") to QTRLQ
+	move (((month(DATE1NQ)+2)/3) as "C")+"Q"+((DATE1NQ as date "YY") as "CC") to QTRNQ
+    end
+    if FILE1 = default then move "*" to FILE1
+    if FILE2 = default then move "*" to FILE2
+    move FILE1 to IFILE
+    move FILE2 to OFILE
+    if "*" # FILE1 and = FILE2 then begin
+	move position(FILE1,".") to I
+	if I>0 
+	    then move substr(FILE1,1,I-1) to OFILE
+	    else move FILE1 to OFILE
+    end
+    if ROOT = default then select NODE via ID=RES.ROOT
+	then move RES.ROOT to ROOT
+	else type "%default node for resource ",RES.ID,
+	    " does not exist: ",RES.ROOT,@cr
+    if ROOT <= 1
+	then nothing
+	else select NODE via ID=ROOT
+	    then nothing
+	    else begin
+		type "?node does not exist: ",ROOT,@cr
+		move default to CMD end
+    conditional on CMD begin
+	"?" or 
+	"HELP" or "HEL" or "H": type 
+		"one of: (only upper case letters required)",@cr,
+		"  <report.name>:",@cr,
+		"    Active.Proj.Status",@cr,
+		"    Final.Ms",@cr,
+		"    Full.Proj.Status",@cr,
+		"    Incentive.Report",@cr,
+		"    Node.Tree",@cr,
+		"    Preliminary.Ms",@cr,
+		"    Project.Desc",@cr,
+		"    Project.Plan.Summary",@cr,
+		"    Project.Status",@cr,
+		"    Project.SUMmary",@cr,
+		"    Quick.Status",@cr,
+		"    Resource.Status",@cr,
+		"    Task.Summary",@cr,
+		"    Task.Res.Summary",@cr,
+		"    Time.Graph",@cr,
+		"  PC70.<report.name>:",@cr,
+		"    PC70.Resource.Status",@cr,
+		"  <DBM.utility.name>:",@cr,
+		"    Dump.Projects",@cr,
+		"    Dump.Sched",@cr,
+		"    List.Nicknames",@cr,
+		"    Load.Projects",@cr,
+		"    Load.Sched",@cr,
+		"    Purge.Projects",@cr,
+		"    Reload.Projects",@cr,
+		"    Update",@cr,
+		"  <etc>:",@cr,
+		"    Bug                - reports MTS bugs to maintainer",@cr,
+		"    News               - lists recent changes",@cr,
+		"    Help",@cr,
+		"    Quit",@cr,
+		"followed by one or more of",@cr,
+		"  root.id              - selects subtree",@cr,
+		"  res.id               - selects resource",@cr,
+		"  mm/dd/yy mm/dd/yy    - selects date range (inclusive)",@cr,
+		"  nQyy                 - selects quarter",@cr,
+		"  mmmyy                - selects month",@cr,
+		"  level-level          - selects levels range",@cr,
+		"  input.file",@cr,
+		"  output.file",@cr
+% REPORTS %
+	"ACTIVE.PROJ.STATUS" or "APS": run ACTIVE.PROJ.STATUS (FILE1,ROOT,LEVEL1,LEVEL2,QTR,DATE1,DATE2)
+	"FINAL.MS" or "FM": run FINAL.MS (FILE1,ROOT,QTRLQ,DATE1LQ,DATE2LQ)
+	"FULL.PROJ.STATUS" or "FPS": run FULL.PROJ.STATUS (FILE1,ROOT,QTRLQ,DATE1LQ,DATE2LQ)
+	"INCENTIVE.REPORT" or "IR": run INCENTIVE.REPORT (FILE1,FILE2,QTRLQ,DATE1LQ,DATE2LQ)
+	"NODE.TREE" or "NT": run NODE.TREE (FILE1,ROOT,LEVEL1,LEVEL2)
+	"PRELIMINARY.MS" or "PM": run PRELIM.MS (FILE1,ROOT,QTRNQ,DATE1NQ,DATE2NQ,LEVEL1,LEVEL2)
+	"PROJECT.DESC" or "PD": run PROJECT.DESC(FILE1,ROOT,QTRNQ,DATE1NQ,DATE2NQ,LEVEL1,LEVEL2)
+	"PROJECT.STATUS" or "PS": run PROJECT.STATUS (FILE1,ROOT,LEVEL1,LEVEL2,QTR,DATE1,DATE2)
+	"PROJECT.SUMMARY" or "PSUM": run PROJECT.SUMMARY (ROOT,FILE1,LEVEL1,LEVEL2,QTR,DATE1,DATE2)
+	"PROJECT.PLAN.SUMMARY" or "PPS": run PROJECT.PLAN.SUMMARY (ROOT,FILE1,LEVEL1,LEVEL2,QTR,DATE1,DATE2)
+	"TIME.GRAPH" or "TG": run TIME.GRAPH (ROOT,FILE1,DATE1,DATE2)
+	"QUICK.STATUS" or "QS": run QUICK.STATUS (FILE1,ROOT,LEVEL1,LEVEL2,QTRLQ,DATE1LQ,DATE2LQ)
+	"RESOURCE.STATUS" or "RS": run RESOURCE.STATUS (RES.ID,FILE1,LEVEL1,LEVEL2,QTR,DATE1,DATE2)
+	"TASK.SUMMARY" or "TS": run TASK.SUMMARY (FILE1,ROOT,QTRLQ,DATE1LQ,DATE2LQ,SW)
+	"TASK.RES.SUMMARY" or "TRS": run TASK.RES.SUMMARY (FILE1,ROOT,QTRLQ,DATE1LQ,DATE2LQ,SW)
+% PC70 REPORTS %
+	"PC70.RESOURCE.STATUS" or "PC70.RS": run PC70.RESOURCE.STATUS (FILE1,LEVEL1,LEVEL2,QTR,DATE1,DATE2)
+% DBA UTILITIES %
+	"DUMP.PROJECTS" or "DUMP" or "DP": run DUMP.PROJECTS (FILE1,ROOT,LEVEL1,LEVEL2)
+	"DUMP.SCHED" or "DS": run DUMP.SCHED (FILE1,ROOT)
+	"LOAD.PROJECTS" or "LOAD" or "LP": run LOAD.PROJECTS ("LOAD",OFILE,IFILE)
+	"LOAD.SCHED" or "LS": run LOAD.SCHED (FILE1,ROOT)
+	"PURGE.PROJECTS" or "PURGE" or "PP": run PURGE.PROJECTS (ROOT,LEVEL1,LEVEL2)
+	"RELOAD.PROJECTS" or "RELOAD" or "RP": run LOAD.PROJECTS ("RELOAD",OFILE,IFILE)
+        "LIST.NICKNAMES" or "LIST" or "LN": run LIST.NICKNAMES
+        "UPDATER" or "UPDATE" or "UP" or "U": run UPDATER
+% ETC %
+	"DEBUG": type
+	    "ROOT    ",ROOT,@cr,
+	    "RES.ID  ",RES.ID,@cr,
+	    "QTR     ",QTR,"      ",QTRLQ,"      ",QTRNQ,@cr,
+	    "DATE1   ",DATE1,"  ",DATE1LQ,"  ",DATE1NQ,@cr,
+	    "DATE2   ",DATE2,"  ",DATE2LQ,"  ",DATE2NQ,@cr,
+	    "LEVEL1  ",LEVEL1,@cr,
+	    "LEVEL2  ",LEVEL2,@cr,
+	    "FILE1   ",FILE1,@cr,
+	    "FILE2   ",FILE2,@cr
+	"BUG" or "BU" or "B": run BUG
+	"NEWS" or "NEW" or "N": for each NEWS.TXT type trim(L),@cr
+	"QUIT" or "Q" or "QUI": return
+	" ": nothing
+    end else type '?type "?" for help',@cr
+    type trim(GNAME),">"
+end
+
+end
