@@ -1,0 +1,105 @@
+procedure HACKER
+begin
+
+    controls for relations concurrent update
+
+    source CMDS from "TERM" fixed form input LINE, @cr
+  
+    type "!"
+    for each CMDS begin
+	move upper.case(LINE) to LINE
+	conditional on LINE begin
+	"L" or "LI" or "LIS" or "LIST": select NODE via key
+	    then begin
+		type "ID   ", ID, @tab 2, trim(TITLE)
+		type @cr, "UP   ", UP, @tab 2
+		if UP # default then select NODE via (ID=UP)
+		    then type trim(TITLE)
+		    else type "?no node"
+		type @cr, "DN   ", DN, @tab 2
+		if DN # default then select NODE via (ID=DN)
+		    then type trim(TITLE)
+		    else type "?no node"
+		type @cr, "PRED ", PRED, @tab 2
+		if PRED # default then select NODE via (ID=PRED)
+		    then type trim(TITLE)
+		    else type "?no node"
+		type @cr, "SUCC ", SUCC, @tab 2
+		if PRED # default then select NODE via (ID=SUCC)
+		    then type trim(TITLE)
+		    else type "?no node"
+		type @cr end
+	    else type "?no node", @cr
+	"C" or "CH" or "CHE" or "CHEC" or "CHECK": run CHECKER
+	"U" or "UP": select NODE via key
+	    then begin
+		type UP, "  >"
+		accept UP
+		alter NODE end
+	    else type "?no node", @cr
+	"D" or "DN": select NODE via key
+	    then begin
+		type DN, "  >"
+		accept DN
+		alter NODE end
+	    else type "?no node", @cr
+	"P" or "PR" or "PRE" or "PRED": select NODE via key
+	    then begin
+		type PRED, "  >"
+		accept PRED
+		alter NODE end
+	    else type "?no node", @cr
+	"S" or "SU" or "SUC" or "SUCC": select NODE via key
+	    then begin
+		type SUCC, "  >"
+		accept SUCC
+		alter NODE end
+	    else type "?no node", @cr
+	"^": select NODE via key 
+	    then select NODE via (ID=UP) 
+		then begin
+		    type ID,"  ",TITLE,"  ",UP,"  ",DN,"  ",PRED,"  ",SUCC,@cr
+		    move ID to ID of procedure end
+		else type "?no node", @cr
+	    else type "?no node", @cr
+	"<": select NODE via key 
+	    then select NODE via (ID=PRED) 
+		then begin
+		    type ID,"  ",TITLE,"  ",UP,"  ",DN,"  ",PRED,"  ",SUCC,@cr
+		    move ID to ID of procedure end
+		else type "?no node", @cr
+	    else type "?no node", @cr
+	">": select NODE via key 
+	    then select NODE via (ID=SUCC) 
+		then begin
+		    type ID,"  ",TITLE,"  ",UP,"  ",DN,"  ",PRED,"  ",SUCC,@cr
+		    move ID to ID of procedure end
+		else type "?no node", @cr
+	    else type "?no node", @cr
+	"Q" or "QU" or "QUI" or "QUIT": return
+	"?" or "H" or "HE" or "HEL" or "HELP": type
+	    "one of",@cr,
+	    "  node",@cr,
+	    "  <",@cr,
+	    "  >",@cr,
+	    "  ^",@cr,
+	    "  LIST",@cr,
+	    "  CHECK",@cr,
+	    "  UP",@cr,
+	    "  DN",@cr,
+	    "  PRED",@cr,
+	    "  SUCC",@cr,
+	    "  HELP",@cr,
+	    "  QUIT",@cr
+	end else if LINE is ID then select NODE via (ID=LINE as ID)
+	    then begin
+	    	type ID,"  ",TITLE,"  ",UP,"  ",DN,"  ",PRED,"  ",SUCC,@cr
+		move ID to ID of procedure end
+	    else begin
+		type "?no node",@cr
+		move default to ID of procedure end
+	else type "?",@cr
+	type "!"
+    end
+
+end
