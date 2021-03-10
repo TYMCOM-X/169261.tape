@@ -1,0 +1,420 @@
+procedure TIME.SHEETS
+%
+    This is the basic procedure for generating and loading time sheets.
+    Procedure will accept dates, or search for a date that is generally
+    appropriate for the command.  Time sheets are generated based on
+    the relation NODE.  All projects which pass the criteria as current
+    projects for the date, and have the person as either MGR or LDR
+    are written to the time sheet along with any tasks for that project
+    that have task records in TASK.  If a time sheet file already exists
+    the procedure will write a backup file.  The file is written in a
+    format to be loaded by LOAD.  LOAD not only reads the time sheet
+    specified, but also deletes any old records for that person, project,
+    and task.  LOAD will accept new projects and assign project numbers
+    and insert them in the tree.  LOAD checks for total hours, and writes
+    a file in the directory of the time.sheet if the total hours are
+    greater than 0.  It also reports blank time sheets.
+
+    STATUS or OUTSTANDING reports on time sheets that have not been
+    loaded or had no hours reported when they were load.
+    
+    Because time sheets are loaded free form from a file, the placement
+    and number of commas is critical.  Many errors reported by MAGNUM
+    in loading time sheets are caused by incorrect editing of the time
+    sheet files.
+
+    EDIT HISTORY:
+
+    This is a modification of TIME.SHEETS that uses the new relation
+    NEW.PROJECT to avoid assigning duplicate numbers to new projects when
+    a time sheet has to get reloaded, and also does not "mark" as loaded
+    a time sheet with 0 hours when loaded.   /Lois  8/3/82
+
+    Will not load ACT.FIN for on-going projects (KIND = 1) /Lois 11-1-82
+
+    New command RELOAD added that checks all task records for the DOE and
+    RES.ID.  This will eliminate the problem of task records remaining in
+    the data base after switching records from one project to another and
+    then eliminating the first project.  12-1-82 LFL
+
+    LOAD changed to write a file in each directory.  This files gives
+    total hours if total is greater than 0, else gives a message
+    that the time sheet was blank.  1-25-83 LFL
+
+    Bug in LOAD that wrote over message file will new name after no file
+    found corrected.  5-17-83 LFL
+    %
+begin
+
+define 
+    PARSE.BREAK = @32
+field
+    TOTAL.HOURS as "6L.B",
+    DEF.RES.ID same as RES.ID,
+    IN.RES.ID same as RES.ID,
+    NEW.PROJECT.ID same as ID,
+    F as "80C",
+    DOE.SAVE same as DOE,
+    MESSAGE.FILE as "25C",
+    MESSAGE.LIST as "120C",
+    NOT.DONE as "120C",
+    TS.FILE as "25C"
+
+report TIME.SHEET
+    to TS.FILE
+    page.size 0
+    report.heading print
+        ";MTS time sheet",
+        @tab to 33, "resource:",
+        @tab to 48, trim(RES.NAME), @cr,
+        ";generated ", today as date "ZM/DD/YY",
+        " by ", trim(user.name),
+        " for week ending ", WEEK.END as date "WWW ZM/DD/YY", @cr,
+        ";labels: Resource Project Task History", @cr,
+        "R,",RES.ID,",",WEEK.END as date "MMDDYY",@cr,
+        ";,projid.description                   .begin .finish",@cr,
+        ";,task.description              .done  .left  .remarks",@cr
+
+report MESSAGE.RPT to MESSAGE.FILE
+    page.size 0
+
+report MESSAGE.CMD to "TS.CMD"
+    page.size 0
+
+source TS 
+    from TS.FILE
+    free form
+    input F, conditional on substr(F,1,1) begin
+        ";": @cr
+        "R": RES.ID,WEEK.END as date "ZMDDYY",@cr
+        "P": ID,TITLE,ACT.BEG,ACT.FIN,@cr
+        "T": TASK.ID,TASK.DESC,HOURS,REMAIN,REMARK,@cr
+        "H": LINE,@cr
+    end else begin @cr end
+
+relation RES. is
+  key	RES.ID
+
+relation FILE. is
+  key	TS.FILE
+
+relation CURRENT.NODE is
+  key	RES.ID,
+	ID
+
+relation CURRENT.TASK is
+  key   RES.ID,
+        ID,
+        TASK.ID
+
+include text "PARSE" %( source.string, token.string )%
+include text "NEW.NODE"
+include text "INSERT.NODE"
+
+%
+        command level loop
+%
+move "????" to DEF.RES.ID
+for each RES
+    if RES.UNAME = USER.NAME 
+        then move RES.ID to DEF.RES.ID
+CMD.LOOP: begin
+    type ">>"
+    accept from terminal LINE
+    apply PARSE (LINE,CMD) move upper.case(CMD) to CMD
+    move upper.case(LINE) to ARG
+    if ARG = default
+        then move DEF.RES.ID to ARG
+    delete from RES. all
+    delete from FILE. all
+    while ARG # default do begin
+	apply PARSE (ARG,TS.FILE) move TS.FILE to RES.ID
+	select RES via key 
+	    then insert into RES. on duplicate nothing
+	else if RES.ID = "ALL"
+	    then for each RES 
+              if RES.TERM.DATE = default and RES.UNAME ne default then
+		insert into RES. on duplicate nothing
+	      else nothing
+	else if position(TS.FILE,".") # 0
+	    then insert into FILE. on duplicate nothing
+	else 
+	begin
+          type '?illegal argument: "',trim(TS.FILE),'"',@cr
+          repeat CMD.LOOP
+        end
+    end
+    conditional on CMD begin
+        "H" or "HEL" or "HELP": 
+            type "commands are:",@cr,
+                "  LOAD          load time sheet(s)",@cr,
+                "  RELOAD        reload time sheet(s)",@cr,
+                "  GENERATE      generate time sheet(s)",@cr,
+		"  OUTSTANDING   shows outstanding time sheets",@cr,
+                "  STATUS        shows status of time sheets",@cr,
+                "  HELP",@cr,
+                "  QUIT",@cr,
+		"command form is one of:",@cr,
+		"  command",@cr,
+		"  command ALL",@cr,
+		"  command [res.id [res.id ...]] [file [file ...]]",@cr,
+		"where",@cr,
+		"  res.id is a resource to act on",@cr,
+                "  file is a file to load (LOAD and RELOAD commands only)",@cr,
+		"if no arguments are given, default is ",DEF.RES.ID,@cr,
+		"if ALL argument is given, all resources are used",@cr
+
+     "Q" or "QUI" or "QUIT":
+	begin
+	if MESSAGE.LIST ne DEFAULT then
+	  begin
+	  write report MESSAGE.CMD
+	    print to MESSAGE.CMD trim(MESSAGE.LIST),@cr 
+	  type "Be sure to send mail @TS.CMD",@cr
+          end
+	finish CMD.LOOP
+	end
+
+        " ": nothing
+        "G" or "GEN" or "GENE" or "GENERATE": begin
+	    if count(FILE.)#0 then begin
+		type "?filename not expected",@cr
+		repeat CMD.LOOP end
+            move next.date(friday,today-1) to WEEK.END
+            prompt "week ending [",WEEK.END,"]: "
+            accept WEEK.END
+            if WEEK.END = default then move today to WEEK.END
+            move next.date(friday,WEEK.END-1) to WEEK.END
+            % PASS 1: create CURRENT.TASK relation %
+            type "PASS 1:"
+	    delete from CURRENT.NODE all
+            delete from CURRENT.TASK all
+            for each NODE if (ACT.FIN > WEEK.END or = default) 
+		and (ACT.CAN > WEEK.END or = default)
+	  	and (ACT.SUS > WEEK.END or = default)
+		and ( (ACT.BEG # default) or (KIND = 1)
+		or (EST.BEG # default and <= (WEEK.END+15)) )
+		then begin
+		    if MGR # default then insert into CURRENT.NODE 
+		    	using (MGR for RES.ID) on duplicate nothing
+		    if LDR # default then insert into CURRENT.NODE 
+		    	using (LDR for RES.ID) on duplicate nothing
+		    for each TASK via ID begin
+			insert into CURRENT.NODE on duplicate nothing
+			insert into CURRENT.TASK on duplicate nothing
+	            end
+		end
+	    type 
+		" current projects = ", count(CURRENT.NODE) as "6L",
+		", current tasks = ", count(CURRENT.TASK) as "8L", @cr
+            % PASS 2: write time sheet files to users' directories %
+            move default to HOURS,REMAIN,REMARK,LOAD.DATE
+            move WEEK.END to DOE
+            for each RES. select RES via key then
+              if (RES.UNAME # default) then begin
+                type RES.ID," "
+                move "("+trim(RES.UNAME)+")"+(WEEK.END as "5C")+".TIM" to TS.FILE
+                if file TS.FILE exists then begin
+                    move "("+trim(RES.UNAME)+")"+(WEEK.END as "5C")+"x.TIM" to TS.FILE
+                    type "[already exists] "
+                end
+                type trim(TS.FILE)
+                move trim(TS.FILE)+"-A" to TS.FILE
+                      write report TIME.SHEET begin      
+    % write in user's dir %
+		    for each CURRENT.NODE via RES.ID begin
+                        select NODE via key then print to TIME.SHEET
+                          "P",",", ID,",", TITLE,",", ACT.BEG,",", ACT.FIN,@cr
+                        for each CURRENT.TASK via (RES.ID,ID) begin
+                            print to TIME.SHEET
+                                "T,",
+                                TASK.ID,","
+			    select TASK.DIR via key
+				then print to TIME.SHEET TASK.DESC," ,"
+				else print to TIME.SHEET @tab size(TASK.DESC)," ,"
+                            select TASK via key
+                              	then print to TIME.SHEET
+                                    HOURS,",",
+                                    REMAIN,",",
+                                    %REMARK,% @cr
+                              	else print to TIME.SHEET
+                                    HOURS,",",      % default %
+                                    REMAIN,",",     % default %
+                                    %REMARK,% @cr   % default %
+                        end
+			if IDging then 
+			    for each NODE.HIST via (ID,DOE,RES.ID) 
+				print to TIME.SHEET "H,",LINE,@cr
+		    end
+                    select TS.STATUS via key
+                        then alter TS.STATUS using (today for GEN.DATE)
+                        else insert into TS.STATUS using (today for GEN.DATE)
+                end
+                type @cr
+            end % RES %
+        end % GEN %
+
+	"O" or "OU" or "OUT" or "OUTS" or "OUTSTAND" or "OUTSTANDING" or
+        "S" or "STA" or "STAT" or "STATUS": begin
+	    if count(FILE.)#0 then begin
+		type "?filename not expected",@cr
+		repeat CMD.LOOP end
+            for each TS.STATUS
+                select RES. via key 
+		    then if (LOAD.DATE=default) or (substr(CMD,1,1)="S") then begin
+			type 
+			    RES.ID,@tab 3,
+			    WEEK.END
+			if GEN.DATE # default 
+			    then type "   gen ",GEN.DATE  as date "WWW ZM/DD"
+			    else type "                "
+			if LOAD.DATE # default then type 
+			    "   load ",LOAD.DATE as date "WWW ZM/DD"
+			type @cr
+		    end
+        end % STAT %
+
+"R" or "REL" or "RELOAD" or
+"L" or "LOA" or "LOAD": begin
+    if count(RES.) # 0 then begin
+	move next.date(friday,today-8) to WEEK.END
+	prompt "week ending [",WEEK.END,"]: "
+	accept WEEK.END
+	if WEEK.END =default then move today-7 to WEEK.END
+	move next.date(friday,WEEK.END-1) to WEEK.END
+	for each RES. select RES via key then begin
+	    move "("+trim(RES.UNAME)+")"+(WEEK.END as "5C")+".TIM" to TS.FILE
+	    insert into FILE. on duplicate nothing
+	end
+    end
+    for each FILE. begin
+	type upper.case(trim(TS.FILE))
+        move default to ID
+        if file TS.FILE exists
+	    then for each TS 
+		conditional on substr(F,1,1) begin
+		    "R": begin
+			move WEEK.END to DOE
+
+		% 	if TOTAL.HOURS # default then
+			    type " ",TOTAL.HOURS, " hours",@cr %
+
+                        let IN.RES.ID = RES.ID
+                        if substr(CMD,1,1)="R" then
+			  begin
+                          for each TASK 
+                              where (DOE=WEEK.END and RES.ID=IN.RES.ID)
+                              delete from TASK via KEY
+                          for each NODE.HIST
+                              where (DOE=WEEK.END and RES.ID=IN.RES.ID)
+			      delete from NODE.HIST via KEY
+                          end
+			move 0 to TOTAL.HOURS
+			type " ",RES.ID," ",WEEK.END
+		    end
+		    "P": begin
+		        move default to NEW.PROJECT.ID
+			delete from NODE.HIST via (ID,DOE,RES.ID)
+			    if ID = default then 
+			      select NEW.PROJECT via key then
+                                move ID to NEW.PROJECT.ID 
+			      else begin
+				apply NEW.NODE (ID)		    
+				move RES.NEW(RES via key) to UP
+				move RES.MGR(RES via key) to MGR
+				move RES.ID to LDR
+				move 2 to KIND
+				move 7 to LEVEL
+				move DOE to DOE.SAVE
+				move today to DOE
+                                if ACT.BEG = default then 
+                                  move WEEK.END - 4 to ACT.BEG
+				type @cr,
+				    "inserting ",ID as "8L",
+				    " ",trim(TITLE)
+				if UP # default
+				    then apply INSERT.NODE
+				    else type @cr,"?attempt to define project by resource with no RES.NEW"
+				move DOE.SAVE to DOE
+				insert into NEW.PROJECT
+			    end
+			    else select NODE via ID then begin
+				if default # ACT.BEG of TS 
+				    then move ACT.BEG of TS to ACT.BEG
+				if default # ACT.FIN of TS and KIND = 2
+				    then move ACT.FIN of TS to ACT.FIN
+				if default # ACT.BEG of TS or ACT.FIN of TS
+				    then alter NODE 
+			    end
+			    else begin
+				type @cr,"?ID does not exist: ",ID
+				move default to ID
+			    end
+			 if NEW.PROJECT.ID # default then 
+                                move NEW.PROJECT.ID to ID
+		    end
+		    "T": if ID # default then begin
+			delete from TASK via key
+			if default # HOURS or REMAIN or REMARK
+			    then insert into TASK
+			add HOURS to TOTAL.HOURS
+		    end
+		    "H": if ID # default then
+			select largest NODE.HIST via (ID,DOE,RES.ID)
+			    then insert into NODE.HIST using (CNT+1 for CNT,LINE of TS for LINE)
+			    else insert into NODE.HIST using (1 for CNT)
+		end else nothing
+	type " ",TOTAL.HOURS, " hours",@cr
+
+        if TOTAL.HOURS # 0 then
+          select TS.STATUS via (RES.ID = IN.RES.ID,WEEK.END=DOE)
+            then alter TS.STATUS using (today for LOAD.DATE)
+            else insert into TS.STATUS using (today for LOAD.DATE)
+
+        select RES via RES.ID = IN.RES.ID then
+          begin
+          if TOTAL.HOURS = 0 then
+            if NOT.DONE = default then
+              let NOT.DONE = trim(RES.NAME)
+            else
+            let NOT.DONE = trim(NOT.DONE)+", "+trim(RES.NAME)
+          let MESSAGE.FILE = "(" + trim(RES.UNAME)+")TIME.MSG"
+            write report MESSAGE.RPT
+             if TOTAL.HOURS = 0 then
+                print to MESSAGE.RPT
+                TODAY as date "ZD-MMM-YY","  ",(TIME/3600) as "LN",":",
+                ((TIME MOD 3600)/60) as "NN",":",
+                ((TIME MOD 3600) MOD 60) as "NN",
+                @cr,
+                trim(TS.FILE)," loaded.  Time sheet not filled out.",
+                TOTAL.HOURS as "2LN.NN",@cr,@cr,
+                 "Please complete time sheet and send mail",
+                  @cr,"to ",trim(USER.NAME)," to reload the time sheet."
+              else
+                print to MESSAGE.RPT
+                TODAY as date "ZD-MMM-YY","  ",(TIME/3600) as "LN",":",
+                ((TIME MOD 3600)/60) as "NN",":",
+                ((TIME MOD 3600) MOD 60) as "NN",
+                @cr,
+                trim(TS.FILE)," loaded.  Total hours = ",
+                TOTAL.HOURS as "2LN.NN",@cr,@cr,
+         "If the total is incorrect, please correct time sheet and send mail",
+                  @cr,"to ",trim(USER.NAME)," to reload the time sheet."
+           if MESSAGE.LIST = DEFAULT
+                then  let MESSAGE.LIST = trim(RES.UNAME) 
+                else let MESSAGE.LIST = trim(MESSAGE.LIST)+":"+trim(RES.UNAME)
+           end % select %
+         else type " ?no file"
+
+    end % for each FILE. %
+    if NOT.DONE ne DEFAULT then
+      type "The following people have blank time sheets:",@cr,
+      trim(NOT.DONE),@cr
+end % LOAD %
+
+    end else type "?type HELP if you need it",@cr
+    repeat CMD.LOOP
+end % CMD.LOOP %
+
+end
+    0ze0Š
