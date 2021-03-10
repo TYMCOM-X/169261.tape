@@ -1,0 +1,17 @@
+%internal% procedure NEW.NODE (NEW.ID)
+%
+description:
+    allocates a new node number
+calling sequence:
+    field NEW.ID same as ID
+    apply NEW.NODE (NEW.ID)
+%
+begin
+    select GLOBAL.VAR via GVAR=1 
+	then begin
+	    add 1 to GVAL
+	    move GVAL to NEW.ID 
+	    alter GLOBAL.VAR 
+	end
+	else abort "?NEW.NODE: GLOBAL.VAR via GVAR=1 not found"
+end
